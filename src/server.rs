@@ -336,6 +336,25 @@ impl ThunderbirdMcp {
     ) -> Result<CallToolResult, McpError> {
         contacts::create_event(&self.bridge, calendar_id, title, start, end, description, location).await
     }
+
+    #[tool(description = "List calendar events, optionally filtered by calendar and date range")]
+    async fn list_events(
+        &self,
+        #[tool(param)]
+        #[schemars(description = "Calendar ID to filter (omit for all calendars)")]
+        calendar_id: Option<String>,
+        #[tool(param)]
+        #[schemars(description = "Start of date range (ISO 8601, e.g. 2026-02-01T00:00:00Z)")]
+        date_from: Option<String>,
+        #[tool(param)]
+        #[schemars(description = "End of date range (ISO 8601, e.g. 2026-02-28T23:59:59Z)")]
+        date_to: Option<String>,
+        #[tool(param)]
+        #[schemars(description = "Max events to return (default 50, max 200)")]
+        limit: Option<u32>,
+    ) -> Result<CallToolResult, McpError> {
+        contacts::list_events(&self.bridge, calendar_id, date_from, date_to, limit).await
+    }
 }
 
 #[tool(tool_box)]

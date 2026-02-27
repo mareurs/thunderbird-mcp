@@ -479,7 +479,7 @@ var mcpServer = class extends ExtensionCommon.ExtensionAPI {
                     results.push({
                       id: card.UID,
                       displayName: card.displayName,
-                      email: card.primaryEmail,
+                      email: card.primaryEmail || null,
                       firstName: card.firstName,
                       lastName: card.lastName,
                       addressBook: book.dirName
@@ -501,6 +501,67 @@ var mcpServer = class extends ExtensionCommon.ExtensionAPI {
                   type: c.type,
                   readOnly: c.readOnly
                 }));
+              } catch (e) {
+                return { error: e.toString() };
+              }
+            }
+
+            async function listEvents(calendarId, dateFrom, dateTo, limit) {
+              if (!cal) return { error: "Calendar not available" };
+              try {
+                if (dateFrom && isNaN(new Date(dateFrom).getTime())) return { error: `Invalid date_from: ${dateFrom}` };
+                if (dateTo   && isNaN(new Date(dateTo).getTime()))   return { error: `Invalid date_to: ${dateTo}` };
+
+                const dtToISO = (dt) => {
+                  if (!dt) return null;
+                  try { return cal.dtz.dateTimeToJsDate(dt.getInTimezone(cal.dtz.UTC)).toISOString(); }
+                  catch { return dt.icalString; }
+                };
+
+                const calendars = cal.manager.getCalendars();
+                const targets = calendarId
+                  ? calendars.filter(c => c.id === calendarId)
+                  : calendars;
+
+                if (calendarId && targets.length === 0) return { error: `Calendar not found: ${calendarId}` };
+
+                const rangeStart = dateFrom ? cal.dtz.jsDateToDateTime(new Date(dateFrom), cal.dtz.UTC) : null;
+                const rangeEnd   = dateTo   ? cal.dtz.jsDateToDateTime(new Date(dateTo),   cal.dtz.UTC) : null;
+                // ITEM_FILTER_COMPLETED_ALL is a no-op for events but some backends validate the full mask
+                const filter = Ci.calICalendar.ITEM_FILTER_TYPE_EVENT | Ci.calICalendar.ITEM_FILTER_COMPLETED_ALL;
+
+                const maxResults = Math.min(
+                  Number.isFinite(limit) && limit > 0 ? Math.floor(limit) : DEFAULT_MAX_RESULTS,
+                  MAX_SEARCH_RESULTS_CAP
+                );
+
+                const safeProp = (item, key) => {
+                  try { return item.getProperty(key) || null; } catch { return null; }
+                };
+
+                const events = [];
+                outer: for (const calendar of targets) {
+                  for await (const batch of calendar.getItems(filter, 0, rangeStart, rangeEnd)) {
+                    const items = Array.isArray(batch) ? batch : [batch];
+                    for (const item of items) {
+                      const desc = safeProp(item, "DESCRIPTION");
+                      events.push({
+                        id: item.id,
+                        title: item.title,
+                        start: dtToISO(item.startDate),
+                        end: dtToISO(item.endDate),
+                        location: safeProp(item, "LOCATION"),
+                        description: desc ? desc.substring(0, 200) : null,
+                        calendar: calendar.name,
+                        calendarId: calendar.id,
+                      });
+                      if (events.length >= maxResults) break outer;
+                    }
+                  }
+                }
+
+                events.sort((a, b) => (a.start || "").localeCompare(b.start || ""));
+                return { events, count: events.length };
               } catch (e) {
                 return { error: e.toString() };
               }
@@ -692,12 +753,12 @@ var mcpServer = class extends ExtensionCommon.ExtensionAPI {
 
                     const baseResponse = {
                       id: msgHdr.messageId,
-                      subject: msgHdr.mime2DecodedSubject || msgHdr.subject,
-                      author: msgHdr.mime2DecodedAuthor || msgHdr.author,
-                      recipients: msgHdr.mime2DecodedRecipients || msgHdr.recipients,
-                      ccList: msgHdr.ccList,
+                      subject: sanitizeStr(msgHdr.mime2DecodedSubject || msgHdr.subject),
+                      author: sanitizeStr(msgHdr.mime2DecodedAuthor || msgHdr.author),
+                      recipients: sanitizeStr(msgHdr.mime2DecodedRecipients || msgHdr.recipients),
+                      ccList: sanitizeStr(msgHdr.ccList),
                       date: msgHdr.date ? new Date(msgHdr.date / 1000).toISOString() : null,
-                      body,
+                      body: sanitizeStr(body),
                       bodyIsHtml,
                       attachments
                     };
@@ -1581,6 +1642,8 @@ var mcpServer = class extends ExtensionCommon.ExtensionAPI {
               "/filters/apply":         async ({ account_id, folder_uri }) => applyFilters(account_id, folder_uri),
               "/contacts/search":       async ({ query, limit }) => searchContacts(query, limit),
               "/calendars/list":        async () => listCalendars(),
+              "/calendars/list-events":  async ({ calendar_id, date_from, date_to, limit }) =>
+                                           listEvents(calendar_id, date_from, date_to, limit),
               "/calendar/create-event": async ({ calendar_id, title, start, end, description, location }) =>
                                           createEvent(title, start, end, location, description, calendar_id, false),
             };

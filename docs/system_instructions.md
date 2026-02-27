@@ -7,3 +7,4 @@
 - `get_recent_messages` without `folder` returns all accounts interleaved; Gmail duplicates messages across labels — always scope by folder
 - The Spam folder causes JSON parse errors due to unsanitized control characters — do not read it
 - Filters apply to future incoming mail only; to backfill: Tools → Message Filters → Run Now
+- `list_events` without a date range returns up to 50 events across all calendars; always provide `date_from`/`date_to` for targeted queries on large calendars

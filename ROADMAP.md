@@ -3,7 +3,7 @@
 ## Planned Features
 
 ### Calendar
-- [ ] **`list_events`** — query events by calendar ID and date range using `cal.manager`; needed to inspect/differentiate events across accounts
+- [x] **`list_events`** — query events by calendar ID and date range using `cal.manager`
 
 ### Mail
 - [ ] **`get_message` body sanitization** — strip control characters in `get_message` body (same as already done for subject/author in search/recent)
@@ -20,4 +20,4 @@
 - [ ] **`delete_folder`** — remove a folder by URI
 
 ### Infrastructure
-- [ ] **`list_events` MCP tool in Rust** — wire new extension endpoint through `src/server.rs` and `src/tools/`
+- [x] **`list_events` MCP tool in Rust** — wired through `src/server.rs` and `src/tools/contacts.rs`
