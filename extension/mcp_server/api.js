@@ -1125,7 +1125,7 @@ var mcpServer = class extends ExtensionCommon.ExtensionAPI {
                 if (read !== undefined) read = read === true || read === "true";
                 if (flagged !== undefined) flagged = flagged === true || flagged === "true";
                 if (trash !== undefined) trash = trash === true || trash === "true";
-                if (moveTo !== undefined && (typeof moveTo !== "string" || !moveTo)) {
+                if (moveTo != null && (typeof moveTo !== "string" || !moveTo)) {
                   return { error: "move_to must be a non-empty string" };
                 }
                 if (moveTo && trash === true) return { error: "Cannot specify both move_to and trash" };
