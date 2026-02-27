@@ -16,5 +16,8 @@
 ### Filters
 - [ ] **OR logic across senders** — currently conditions are ANDed; multi-sender OR requires creating one filter per sender
 
+### Folders
+- [ ] **`delete_folder`** — remove a folder by URI
+
 ### Infrastructure
 - [ ] **`list_events` MCP tool in Rust** — wire new extension endpoint through `src/server.rs` and `src/tools/`
