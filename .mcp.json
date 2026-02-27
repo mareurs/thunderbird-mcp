@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "thunderbird": {
+      "type": "stdio",
+      "command": "/home/marius/work/claude/thunderbird-mcp/target/release/thunderbird-mcp",
+      "args": [],
+      "instructions": "Thunderbird MCP quirks: create_filter conditions are ANDed — create one filter per sender for OR logic; create_folder parent_uri must be an existing folder (INBOX works), not the account root — returns path:null, call list_folders for the real URI; get_recent_messages without folder returns all accounts interleaved and Gmail duplicates across labels; Spam folder causes JSON errors — do not read it; filters apply to future mail only."
+    }
+  }
+}

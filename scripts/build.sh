@@ -15,6 +15,6 @@ mkdir -p "$DIST_DIR"
 
 # Package extension
 cd "$EXTENSION_DIR"
-zip -r "$DIST_DIR/thunderbird-mcp.xpi" . -x "*.DS_Store" -x "*.git*"
+zip -r "$DIST_DIR/mcp-server.xpi" . -x "*.DS_Store" -x "*.git*"
 
-echo "Built: $DIST_DIR/thunderbird-mcp.xpi"
+echo "Built: $DIST_DIR/mcp-server.xpi"

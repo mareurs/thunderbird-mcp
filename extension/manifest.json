@@ -1,6 +1,6 @@
 {
   "manifest_version": 2,
-  "name": "Thunderbird MCP",
+  "name": "MCP Server",
   "version": "0.1",
   "description": "MCP server for AI assistants to access email, contacts, and calendars",
   "browser_specific_settings": {

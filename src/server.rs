@@ -215,10 +215,10 @@ impl ThunderbirdMcp {
         #[schemars(description = "Filter name")]
         name: String,
         #[tool(param)]
-        #[schemars(description = "Array of condition objects with field/op/value")]
+        #[schemars(description = "Array of condition objects with attrib/op/value (attrib: subject|from|body|to|cc|toOrCc; op: contains|doesntContain|is|isnt|beginsWith|endsWith)")]
         conditions: Value,
         #[tool(param)]
-        #[schemars(description = "Array of action objects with type/value")]
+        #[schemars(description = "Array of action objects with type/value (type: moveToFolder|copyToFolder|markRead|markUnread|markFlagged|delete|addTag; moveToFolder/copyToFolder require value=folderURI)")]
         actions: Value,
         #[tool(param)]
         #[schemars(description = "Enable filter immediately (default true)")]

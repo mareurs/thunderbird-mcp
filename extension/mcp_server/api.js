@@ -411,9 +411,9 @@ var mcpServer = class extends ExtensionCommon.ExtensionAPI {
 
                     results.push({
                       id: msgHdr.messageId,
-                      subject: msgHdr.mime2DecodedSubject || msgHdr.subject,
-                      author: msgHdr.mime2DecodedAuthor || msgHdr.author,
-                      recipients: msgHdr.mime2DecodedRecipients || msgHdr.recipients,
+                      subject: sanitizeStr(msgHdr.mime2DecodedSubject || msgHdr.subject),
+                      author: sanitizeStr(msgHdr.mime2DecodedAuthor || msgHdr.author),
+                      recipients: sanitizeStr(msgHdr.mime2DecodedRecipients || msgHdr.recipients),
                       ccList: msgHdr.ccList,
                       date: msgHdr.date ? new Date(msgHdr.date / 1000).toISOString() : null,
                       folder: folder.prettyName,
@@ -446,9 +446,11 @@ var mcpServer = class extends ExtensionCommon.ExtensionAPI {
                 }
               }
 
-              results.sort((a, b) => b._dateTs - a._dateTs);
+              const seen = new Set();
+              const deduped = results.filter(r => { if (!r.id || seen.has(r.id)) return false; seen.add(r.id); return true; });
+              deduped.sort((a, b) => b._dateTs - a._dateTs);
 
-              const messages = results.slice(0, effectiveLimit).map(r => {
+              const messages = deduped.slice(0, effectiveLimit).map(r => {
                 delete r._dateTs;
                 return r;
               });
@@ -1026,9 +1028,9 @@ var mcpServer = class extends ExtensionCommon.ExtensionAPI {
                     if (unreadOnly && msgHdr.isRead) continue;
                     results.push({
                       id: msgHdr.messageId,
-                      subject: msgHdr.mime2DecodedSubject || msgHdr.subject,
-                      author: msgHdr.mime2DecodedAuthor || msgHdr.author,
-                      recipients: msgHdr.mime2DecodedRecipients || msgHdr.recipients,
+                      subject: sanitizeStr(msgHdr.mime2DecodedSubject || msgHdr.subject),
+                      author: sanitizeStr(msgHdr.mime2DecodedAuthor || msgHdr.author),
+                      recipients: sanitizeStr(msgHdr.mime2DecodedRecipients || msgHdr.recipients),
                       date: msgHdr.date ? new Date(msgHdr.date / 1000).toISOString() : null,
                       folder: folder.prettyName,
                       folderPath: folder.URI,
@@ -1061,8 +1063,10 @@ var mcpServer = class extends ExtensionCommon.ExtensionAPI {
                 }
               }
 
-              results.sort((a, b) => b._dateTs - a._dateTs);
-              const messages = results.slice(0, effectiveLimit).map(r => { delete r._dateTs; return r; });
+              const seen = new Set();
+              const deduped = results.filter(r => { if (!r.id || seen.has(r.id)) return false; seen.add(r.id); return true; });
+              deduped.sort((a, b) => b._dateTs - a._dateTs);
+              const messages = deduped.slice(0, effectiveLimit).map(r => { delete r._dateTs; return r; });
               if (hasImapFolders) {
                 return { messages, imapSyncPending: true, note: "IMAP folder sync is async - results may not include the latest messages. Retry if expected messages are missing." };
               }
@@ -1171,6 +1175,9 @@ var mcpServer = class extends ExtensionCommon.ExtensionAPI {
                     }
                   }
                 } catch {}
+                if (!newPath) {
+                  newPath = parentUri.replace(/\/$/, '') + '/' + name.replace(/ /g, '%20');
+                }
 
                 return { success: true, message: `Folder "${name}" created`, path: newPath };
               } catch (e) {
@@ -1271,6 +1278,10 @@ var mcpServer = class extends ExtensionCommon.ExtensionAPI {
                 terms,
                 actions,
               };
+            }
+
+            function sanitizeStr(s) {
+              return s ? s.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '') : s;
             }
 
             function buildTerms(filter, conditions) {

@@ -35,11 +35,13 @@ curl -s -X POST http://localhost:8765/accounts/list \
 cargo test
 ```
 
+## Hard Rules
+
+- **If you modify MCP tool schemas, action/condition formats, or extension logic — you MUST update `docs/system_instructions.md` and the `instructions` field in `.mcp.json` to reflect the change.**
+
 ## Known Issues
 
-- **Duplicate search results** — Gmail messages appear in multiple folders (All Mail, Inbox, Important, Starred) because Gmail uses labels mapped as IMAP folders. `search_messages` and `get_recent_messages` return one result per folder occurrence. Fix: dedup by message ID in the extension or Rust layer.
-
-- **Control chars in raw HTTP responses** — Email subjects/bodies can contain control characters that make the raw HTTP response invalid JSON. Not a problem in production (Rust's `sanitize_str()` strips them before parsing), but direct `curl` tests against port 8765 will fail with `JSONDecodeError`. Fix: add sanitization in the extension before JSON serialization.
+- **Control chars in raw HTTP responses** — Email subjects/bodies can contain control characters that make the raw HTTP response invalid JSON. Not a problem in production (Rust's `sanitize_str()` strips them before parsing), but direct `curl` tests against port 8765 will fail with `JSONDecodeError`. Fix: add sanitization in the extension before JSON serialization. **Partially fixed**: `get_recent_messages` and `search_messages` now sanitize subject/author/recipients in the extension; `get_message` body and other tools do not yet.
 
 - **IMAP staleness** — `imapSyncPending: true` is returned when IMAP folders are involved. Message databases may lag behind the server until the user clicks the folder in Thunderbird. Not fixable without async sync; just retry.
 
