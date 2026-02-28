@@ -97,6 +97,10 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for build setup, code structure, and cont
 
 See [ROADMAP.md](ROADMAP.md).
 
+## Acknowledgements
+
+This project was inspired by [TKasperczyk/thunderbird-mcp](https://github.com/TKasperczyk/thunderbird-mcp), the original JavaScript/Node.js implementation of the same idea. The Thunderbird extension structure and HTTP API design draw heavily from that work. This version replaces the Node.js bridge with a Rust binary for a leaner runtime dependency.
+
 ## License
 
 MIT — see [LICENSE](LICENSE).
