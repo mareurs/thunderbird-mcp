@@ -1,6 +1,10 @@
+<img src="assets/icon.png" width="96" align="right" alt="MCP Server icon">
+
 # thunderbird-mcp
 
 A [Model Context Protocol](https://spec.modelcontextprotocol.io/) server that gives AI assistants (Claude, etc.) access to Thunderbird — email, contacts, calendar, and mail filters.
+
+[![Install from ATN](https://img.shields.io/badge/Thunderbird-Install%20Extension-blue?logo=thunderbird)](https://addons.thunderbird.net/en-US/thunderbird/addon/mcp-server/)
 
 ```
 AI assistant ──stdio──▶ thunderbird-mcp (Rust) ──HTTP :8765──▶ Thunderbird extension (XPCOM)
@@ -27,12 +31,14 @@ AI assistant ──stdio──▶ thunderbird-mcp (Rust) ──HTTP :8765──�
 
 ### 1. Download or build
 
-**Pre-built (recommended):** grab `mcp-server.xpi` and `thunderbird-mcp-linux-x86_64` from the [latest release](https://github.com/your-org/thunderbird-mcp/releases/latest).
+**Pre-built (recommended):** grab `mcp-server.xpi` and `thunderbird-mcp-linux-x86_64` from the [latest release](https://github.com/mareurs/thunderbird-mcp/releases/latest).
+
+Alternatively, install the extension directly from the [Thunderbird Add-ons gallery](https://addons.thunderbird.net/en-US/thunderbird/addon/mcp-server/) and download only the binary from the release.
 
 **Build from source:**
 
 ```bash
-git clone https://github.com/your-org/thunderbird-mcp
+git clone https://github.com/mareurs/thunderbird-mcp
 cd thunderbird-mcp
 
 cargo build --release          # builds ./target/release/thunderbird-mcp
@@ -41,7 +47,9 @@ cargo build --release          # builds ./target/release/thunderbird-mcp
 
 ### 2. Install the extension
 
-Open Thunderbird → **Add-ons and Themes** → gear icon → **Install Add-on From File** → select `dist/mcp-server.xpi` → restart Thunderbird.
+**From ATN (easiest):** open Thunderbird → **Add-ons and Themes** → search for "MCP Server" → Install.
+
+**From file:** Open Thunderbird → **Add-ons and Themes** → gear icon → **Install Add-on From File** → select `dist/mcp-server.xpi` → restart Thunderbird.
 
 The extension starts an HTTP server on `localhost:8765` and writes an auth token to `~/.thunderbird-mcp-auth`.
 
@@ -79,7 +87,7 @@ For **Claude Code**, also add the `instructions` field — see [docs/system_inst
 - **`apply_filters`** — async; the MCP response returns before messages are actually moved.
 - **Gmail** — duplicates messages across labels. Always scope `get_recent_messages` / `search_messages` to a specific folder.
 
-Known issues are tracked in [GitHub Issues](https://github.com/your-org/thunderbird-mcp/issues).
+Known issues are tracked in [GitHub Issues](https://github.com/mareurs/thunderbird-mcp/issues).
 
 ## Development
 
