@@ -22,7 +22,7 @@ pub struct Bridge {
 
 impl Bridge {
     pub fn new(token: String) -> Self {
-        Self::with_base_url(token, "http://localhost:8765".to_string())
+        Self::with_base_url(token, "http://localhost:45678".to_string())
     }
 
     pub fn with_base_url(token: String, base_url: String) -> Self {

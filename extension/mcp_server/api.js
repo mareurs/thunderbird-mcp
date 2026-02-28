@@ -5,14 +5,14 @@
  * Thunderbird MCP — thin XPCOM adapter
  *
  * All MCP protocol logic lives in the Rust binary (thunderbird-mcp).
- * This file exposes a plain HTTP API on localhost:8765 so the Rust
+ * This file exposes a plain HTTP API on localhost:45678 so the Rust
  * binary can call Thunderbird's XPCOM APIs.
  *
  * Output string sanitization (control chars, invalid UTF-8) is handled
  * by the Rust binary's sanitize_str(); no sanitizeForJson() needed here.
  */
 
-const MCP_PORT = 8765;
+const MCP_PORT = 45678;
 const AUTH_TOKEN_FILENAME = ".thunderbird-mcp-auth";
 const ATTACHMENT_DIR = "/tmp/thunderbird-mcp";
 const DEFAULT_MAX_RESULTS = 50;

@@ -7,7 +7,7 @@
         "name": "start",
         "type": "function",
         "async": true,
-        "description": "Start the MCP HTTP server on localhost:8765",
+        "description": "Start the MCP HTTP server on localhost:45678",
         "parameters": []
       }
     ]

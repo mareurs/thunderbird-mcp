@@ -7,7 +7,7 @@ A [Model Context Protocol](https://spec.modelcontextprotocol.io/) server that gi
 [![Install from ATN](https://img.shields.io/badge/Thunderbird-Install%20Extension-blue?logo=thunderbird)](https://addons.thunderbird.net/en-US/thunderbird/addon/mcp-server/)
 
 ```
-AI assistant ──stdio──▶ thunderbird-mcp (Rust) ──HTTP :8765──▶ Thunderbird extension (XPCOM)
+AI assistant ──stdio──▶ thunderbird-mcp (Rust) ──HTTP :45678──▶ Thunderbird extension (XPCOM)
 ```
 
 ## Features
@@ -51,7 +51,7 @@ cargo build --release          # builds ./target/release/thunderbird-mcp
 
 **From file:** Open Thunderbird → **Add-ons and Themes** → gear icon → **Install Add-on From File** → select `dist/mcp-server.xpi` → restart Thunderbird.
 
-The extension starts an HTTP server on `localhost:8765` and writes an auth token to `~/.thunderbird-mcp-auth`.
+The extension starts an HTTP server on `localhost:45678` and writes an auth token to `~/.thunderbird-mcp-auth`.
 
 ### 3. Configure your AI client
 

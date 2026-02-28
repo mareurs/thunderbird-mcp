@@ -1,5 +1,10 @@
 # Thunderbird MCP — Roadmap
 
+## Released
+
+- [x] **v0.1.0** — 20 tools across mail, compose, folders, filters, contacts, and calendar
+- [x] **Published to ATN** — available at [addons.thunderbird.net/en-US/thunderbird/addon/mcp-server/](https://addons.thunderbird.net/en-US/thunderbird/addon/mcp-server/)
+
 ## Planned Features
 
 ### Calendar

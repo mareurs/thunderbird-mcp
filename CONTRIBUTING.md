@@ -61,13 +61,13 @@ The binary reads `~/.thunderbird-mcp-auth` for the token. If Thunderbird hasn't 
 
 ```bash
 TOKEN=$(cat ~/.thunderbird-mcp-auth)
-curl -s -X POST http://localhost:8765/accounts/list \
+curl -s -X POST http://localhost:45678/accounts/list \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{}'
 ```
 
-> **Note:** Direct `curl` against port 8765 may fail with JSON errors on endpoints that return email content — control characters in message bodies/subjects are sanitized by the Rust layer, not the extension. This is expected; use the MCP interface in production.
+> **Note:** Direct `curl` against port 45678 may fail with JSON errors on endpoints that return email content — control characters in message bodies/subjects are sanitized by the Rust layer, not the extension. This is expected; use the MCP interface in production.
 
 ### Unit tests
 
