@@ -37,7 +37,7 @@ impl ThunderbirdMcp {
     async fn search_messages(
         &self,
         #[tool(param)]
-        #[schemars(description = "Text to search in subject/body")]
+        #[schemars(description = "Text to search in subject, sender, and recipient fields (not body)")]
         query: Option<String>,
         #[tool(param)]
         #[schemars(description = "Folder URI to scope search")]

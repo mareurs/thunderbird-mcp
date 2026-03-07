@@ -450,9 +450,15 @@ var mcpServer = class extends ExtensionCommon.ExtensionAPI {
                 delete r._dateTs;
                 return r;
               });
+              const searchNote = query
+                ? "Search covers subject, sender, and recipient fields only — not message body."
+                : undefined;
               if (hasImapFolders) {
-                return { messages, imapSyncPending: true, note: "IMAP folder sync is async - results may not include the latest messages. Retry if expected messages are missing." };
+                const result = { messages, imapSyncPending: true, note: "IMAP folder sync is async - results may not include the latest messages. Retry if expected messages are missing." };
+                if (searchNote) result.searchNote = searchNote;
+                return result;
               }
+              if (searchNote) return { messages, searchNote };
               return messages;
             }
 
