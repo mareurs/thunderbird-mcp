@@ -358,12 +358,8 @@ var mcpServer = class extends ExtensionCommon.ExtensionAPI {
 
             function searchMessages(query, folderPath, sender, recipient, startDate, endDate, maxResults) {
               const results = [];
-              let lowerQuery = (query || "").toLowerCase();
-              // Append sender/recipient as search terms if provided
-              if (sender) lowerQuery = lowerQuery ? `${lowerQuery} ${sender.toLowerCase()}` : sender.toLowerCase();
               const lowerSender = sender ? sender.toLowerCase() : null;
               const lowerRecipient = recipient ? recipient.toLowerCase() : null;
-              const hasQuery = !!(query || sender || recipient);
 
               const parsedStartDate = startDate ? new Date(startDate).getTime() : NaN;
               const parsedEndDate = endDate ? new Date(endDate).getTime() : NaN;
