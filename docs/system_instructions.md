@@ -9,6 +9,7 @@
 - IMAP results may be stale (`imapSyncPending: true`) — retry if expected messages are missing
 - `get_message` body can be very large (5000+ chars for newsletters) — use `search_messages` to filter before fetching full bodies
 - `update_message` supports `read`, `flagged`, `move_to`, and `trash` fields — omit any field you don't want to change
+- `delete_messages_by_filter` deletes all messages in a folder matching date/sender/query filters in one call — requires `folder_uri` plus at least one of `date_from`, `date_to`, `sender`, or `query`; `date_from` with a date-only string starts at midnight (beginning of that day); `date_to` with a date-only string includes the full day; returns `{ deleted: N }` or `{ deleted: 0, note: "No messages matched the filters" }`
 
 ## Compose
 

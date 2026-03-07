@@ -1176,6 +1176,57 @@ var mcpServer = class extends ExtensionCommon.ExtensionAPI {
               } catch (e) { return { error: e.toString() }; }
             }
 
+            function deleteMessagesByFilter(folderPath, dateFrom, dateTo, sender, query) {
+              try {
+                if (!folderPath) return { error: "folder_uri is required" };
+
+                const folder = MailServices.folderLookup.getFolderForURL(folderPath);
+                if (!folder) return { error: `Folder not found: ${folderPath}` };
+
+                const lowerSender = sender ? sender.toLowerCase() : null;
+                const lowerQuery  = query  ? query.toLowerCase()  : null;
+
+                const parsedDateFrom = dateFrom ? new Date(dateFrom).getTime() : NaN;
+                const parsedDateTo   = dateTo   ? new Date(dateTo).getTime()   : NaN;
+                const dateToOffset   = dateTo   && !dateTo.includes("T")   ? 86400000 : 0;
+                const startTs = Number.isFinite(parsedDateFrom) ? parsedDateFrom * 1000 : null;
+                const endTs   = Number.isFinite(parsedDateTo)   ? (parsedDateTo + dateToOffset) * 1000 : null;
+
+                if (!startTs && !endTs && !lowerSender && !lowerQuery) {
+                  return { error: "At least one filter (date_from, date_to, sender, query) is required" };
+                }
+
+                const db = folder.msgDatabase;
+                if (!db) return { error: "Folder database not available — open the folder in Thunderbird first" };
+
+                const toDelete = [];
+                for (const msgHdr of db.enumerateMessages()) {
+                  const msgDate = msgHdr.date || 0;
+                  if (startTs !== null && msgDate < startTs) continue;
+                  if (endTs   !== null && msgDate > endTs)   continue;
+
+                  if (lowerSender) {
+                    const author = (msgHdr.mime2DecodedAuthor || msgHdr.author || "").toLowerCase();
+                    if (!author.includes(lowerSender)) continue;
+                  }
+                  if (lowerQuery) {
+                    const subject    = (msgHdr.mime2DecodedSubject    || msgHdr.subject    || "").toLowerCase();
+                    const author     = (msgHdr.mime2DecodedAuthor     || msgHdr.author     || "").toLowerCase();
+                    const recipients = (msgHdr.mime2DecodedRecipients || msgHdr.recipients || "").toLowerCase();
+                    const ccList     = (msgHdr.ccList || "").toLowerCase();
+                    if (!subject.includes(lowerQuery) && !author.includes(lowerQuery) &&
+                        !recipients.includes(lowerQuery) && !ccList.includes(lowerQuery)) continue;
+                  }
+                  toDelete.push(msgHdr);
+                }
+
+                if (toDelete.length === 0) return { deleted: 0, note: "No messages matched the filters" };
+
+                folder.deleteMessages(toDelete, null, false, true, null, false);
+                return { deleted: toDelete.length };
+              } catch (e) { return { error: e.toString() }; }
+            }
+
             function updateMessage(messageId, read, flagged, moveTo, trash) {
               try {
                 if (typeof messageId !== "string" || !messageId) return { error: "message_id must be a non-empty string" };
@@ -1623,6 +1674,8 @@ var mcpServer = class extends ExtensionCommon.ExtensionAPI {
               "/messages/update":       async ({ message_id, read, flagged, move_to, trash }) =>
                                           updateMessage(message_id, read, flagged, move_to, trash),
               "/messages/delete":       async ({ message_ids }) => deleteMessages(message_ids),
+              "/messages/delete-by-filter": async ({ folder_uri, date_from, date_to, sender, query }) =>
+                                          deleteMessagesByFilter(folder_uri, date_from, date_to, sender, query),
               "/folders/create":        async ({ parent_uri, name }) => createFolder(parent_uri, name),
               "/mail/send":             async ({ to, subject, body, cc, bcc, from_identity }) =>
                                           composeMail(to, subject, body, cc, bcc, false, from_identity),

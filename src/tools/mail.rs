@@ -98,6 +98,24 @@ pub async fn delete_messages(
     Ok(result_text(r))
 }
 
+pub async fn delete_messages_by_filter(
+    bridge: &Bridge,
+    folder_uri: String,
+    date_from: Option<String>,
+    date_to: Option<String>,
+    sender: Option<String>,
+    query: Option<String>,
+) -> Result<CallToolResult, McpError> {
+    let r = bridge.call("/messages/delete-by-filter", serde_json::json!({
+        "folder_uri": folder_uri,
+        "date_from": date_from,
+        "date_to": date_to,
+        "sender": sender,
+        "query": query,
+    })).await.map_err(bridge_err)?;
+    Ok(result_text(r))
+}
+
 pub async fn create_folder(
     bridge: &Bridge,
     parent_uri: String,

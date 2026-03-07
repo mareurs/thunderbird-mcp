@@ -125,6 +125,28 @@ impl ThunderbirdMcp {
         mail::delete_messages(&self.bridge, message_ids).await
     }
 
+    #[tool(description = "Delete messages from a folder matching date/sender/query filters. folder_uri is required. At least one filter must be provided.")]
+    async fn delete_messages_by_filter(
+        &self,
+        #[tool(param)]
+        #[schemars(description = "Folder URI to delete from (required)")]
+        folder_uri: String,
+        #[tool(param)]
+        #[schemars(description = "Delete messages older than this date (ISO 8601, e.g. 2026-01-01)")]
+        date_to: Option<String>,
+        #[tool(param)]
+        #[schemars(description = "Delete messages on or after this date (ISO 8601, e.g. 2026-01-01); date-only strings start at midnight")]
+        date_from: Option<String>,
+        #[tool(param)]
+        #[schemars(description = "Only delete messages from this sender")]
+        sender: Option<String>,
+        #[tool(param)]
+        #[schemars(description = "Only delete messages matching this keyword in subject/from/to/cc")]
+        query: Option<String>,
+    ) -> Result<CallToolResult, McpError> {
+        mail::delete_messages_by_filter(&self.bridge, folder_uri, date_from, date_to, sender, query).await
+    }
+
     #[tool(description = "Create a new subfolder under a parent folder")]
     async fn create_folder(
         &self,
