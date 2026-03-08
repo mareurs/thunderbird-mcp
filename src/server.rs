@@ -34,7 +34,7 @@ impl ThunderbirdMcp {
     }
 
     #[tool(description = "Search messages by subject, sender, recipient, date range, folder, or body content")]
-async fn search_messages(
+    async fn search_messages(
         &self,
         #[tool(param)]
         #[schemars(description = "Text to search in subject, sender, and recipient fields; also searches body when search_body is true")]
