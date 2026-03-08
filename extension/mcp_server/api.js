@@ -494,6 +494,58 @@ var mcpServer = class extends ExtensionCommon.ExtensionAPI {
               return results;
             }
 
+            function listAddressBooks() {
+              try {
+                const books = [];
+                for (const book of MailServices.ab.directories) {
+                  books.push({ uri: book.URI, name: book.dirName, readOnly: book.readOnly });
+                }
+                return books;
+              } catch (e) { return { error: e.toString() }; }
+            }
+
+            function createContact(addressBookUri, email, firstName, lastName, displayName) {
+              try {
+                if (typeof addressBookUri !== "string" || !addressBookUri) return { error: "address_book_uri must be a non-empty string" };
+                if (typeof email !== "string" || !email) return { error: "email must be a non-empty string" };
+
+                let book = null;
+                for (const b of MailServices.ab.directories) {
+                  if (b.URI === addressBookUri) { book = b; break; }
+                }
+                if (!book) return { error: `Address book not found: ${addressBookUri}` };
+
+                const card = Cc["@mozilla.org/addressbook/cardproperty;1"].createInstance(Ci.nsIAbCard);
+                card.primaryEmail = email;
+                if (firstName) card.firstName = firstName;
+                if (lastName) card.lastName = lastName;
+                card.displayName = displayName || [firstName, lastName].filter(Boolean).join(" ") || email;
+
+                const newCard = book.addCard(card);
+                return { success: true, id: newCard.UID, displayName: newCard.displayName };
+              } catch (e) { return { error: e.toString() }; }
+            }
+
+            function updateContact(contactId, email, firstName, lastName, displayName) {
+              try {
+                if (typeof contactId !== "string" || !contactId) return { error: "contact_id must be a non-empty string" };
+
+                for (const book of MailServices.ab.directories) {
+                  for (const card of book.childCards) {
+                    if (card.UID === contactId) {
+                      if (email !== undefined && email !== null) card.primaryEmail = email;
+                      if (firstName !== undefined && firstName !== null) card.firstName = firstName;
+                      if (lastName !== undefined && lastName !== null) card.lastName = lastName;
+                      if (displayName !== undefined && displayName !== null) card.displayName = displayName;
+                      book.modifyCard(card);
+                      return { success: true, id: contactId };
+                    }
+                  }
+                }
+                return { error: `Contact not found: ${contactId}` };
+              } catch (e) { return { error: e.toString() }; }
+            }
+
             function listCalendars() {
               if (!cal) return { error: "Calendar not available" };
               try {
@@ -1712,6 +1764,9 @@ var mcpServer = class extends ExtensionCommon.ExtensionAPI {
               "/filters/reorder":       async ({ account_id, from_index, to_index }) => reorderFilters(account_id, from_index, to_index),
               "/filters/apply":         async ({ account_id, folder_uri }) => applyFilters(account_id, folder_uri),
               "/contacts/search":       async ({ query, limit }) => searchContacts(query, limit),
+              "/contacts/list-books":   async () => listAddressBooks(),
+              "/contacts/create":       async ({ address_book_uri, email, first_name, last_name, display_name }) => createContact(address_book_uri, email, first_name, last_name, display_name),
+              "/contacts/update":       async ({ contact_id, email, first_name, last_name, display_name }) => updateContact(contact_id, email, first_name, last_name, display_name),
               "/calendars/list":        async () => listCalendars(),
               "/calendars/list-events":  async ({ calendar_id, date_from, date_to, limit }) =>
                                            listEvents(calendar_id, date_from, date_to, limit),
