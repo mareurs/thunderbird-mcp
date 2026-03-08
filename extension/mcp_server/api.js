@@ -1301,6 +1301,19 @@ var mcpServer = class extends ExtensionCommon.ExtensionAPI {
               }
             }
 
+            function deleteFolder(folderUri) {
+              try {
+                if (typeof folderUri !== "string" || !folderUri) return { error: "folder_uri must be a non-empty string" };
+                const folder = MailServices.folderLookup.getFolderForURL(folderUri);
+                if (!folder) return { error: `Folder not found: ${folderUri}` };
+                if (!folder.parent) return { error: "Cannot delete root folder" };
+                folder.parent.propagateDelete(folder, false, null);
+                return { success: true, message: "Folder moved to Trash" };
+              } catch (e) {
+                return { error: e.toString() };
+              }
+            }
+
             // ── Filter constants & helpers ──────────────────────────────────
 
             const ATTRIB_MAP = {
@@ -1683,6 +1696,7 @@ var mcpServer = class extends ExtensionCommon.ExtensionAPI {
               "/messages/delete-by-filter": async ({ folder_uri, date_from, date_to, sender, query }) =>
                                           deleteMessagesByFilter(folder_uri, date_from, date_to, sender, query),
               "/folders/create":        async ({ parent_uri, name }) => createFolder(parent_uri, name),
+              "/folders/delete":        async ({ folder_uri }) => deleteFolder(folder_uri),
               "/mail/send":             async ({ to, subject, body, cc, bcc, from_identity }) =>
                                           composeMail(to, subject, body, cc, bcc, false, from_identity),
               "/mail/reply":            async ({ message_id, body, reply_all }) => replyToMessage(message_id, body, reply_all),
