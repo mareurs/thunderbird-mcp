@@ -160,6 +160,16 @@ impl ThunderbirdMcp {
         mail::create_folder(&self.bridge, parent_uri, name).await
     }
 
+    #[tool(description = "Delete a folder by moving it to the account Trash")]
+    async fn delete_folder(
+        &self,
+        #[tool(param)]
+        #[schemars(description = "URI of the folder to delete (moves to Trash)")]
+        folder_uri: String,
+    ) -> Result<CallToolResult, McpError> {
+        mail::delete_folder(&self.bridge, folder_uri).await
+    }
+
     #[tool(description = "Open a compose window with pre-filled recipients, subject, and body. Nothing sends without your review.")]
     async fn send_mail(
         &self,
