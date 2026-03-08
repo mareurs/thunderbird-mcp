@@ -139,4 +139,50 @@ mod tests {
         ).await.unwrap();
         mock.assert_async().await;
     }
+
+    #[tokio::test]
+    async fn send_mail_propagates_bridge_error() {
+        let mut server = Server::new_async().await;
+        let _mock = server.mock("POST", "/mail/send")
+            .with_status(200)
+            .with_body("{\"error\": \"smtp failure\"}")
+            .create_async().await;
+        let result = send_mail(
+            &mock_bridge(&server).await,
+            vec!["alice@example.com".into()],
+            "Hi".into(), "Hello".into(), None, None, None,
+        ).await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn reply_to_message_propagates_bridge_error() {
+        let mut server = Server::new_async().await;
+        let _mock = server.mock("POST", "/mail/reply")
+            .with_status(200)
+            .with_body("{\"error\": \"message not found\"}")
+            .create_async().await;
+        let result = reply_to_message(
+            &mock_bridge(&server).await,
+            "msg-1".into(), "Thanks!".into(), None,
+        ).await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn forward_message_propagates_bridge_error() {
+        let mut server = Server::new_async().await;
+        let _mock = server.mock("POST", "/mail/forward")
+            .with_status(200)
+            .with_body("{\"error\": \"message not found\"}")
+            .create_async().await;
+        let result = forward_message(
+            &mock_bridge(&server).await,
+            "msg-1".into(),
+            vec!["bob@example.com".into()],
+            None,
+        ).await;
+        assert!(result.is_err());
+    }
+
 }
