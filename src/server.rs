@@ -388,6 +388,19 @@ impl ThunderbirdMcp {
         contacts::update_contact(&self.bridge, contact_id, email, first_name, last_name, display_name).await
     }
 
+    #[tool(description = "Permanently delete a contact from the address book. Pass confirm=true to execute; omit or pass false to preview what would be deleted.")]
+    async fn delete_contact(
+        &self,
+        #[tool(param)]
+        #[schemars(description = "Contact UID from search_contacts results")]
+        contact_id: String,
+        #[tool(param)]
+        #[schemars(description = "Pass true to confirm permanent deletion; pass false to preview the contact without deleting")]
+        confirm: bool,
+    ) -> Result<CallToolResult, McpError> {
+        contacts::delete_contact(&self.bridge, contact_id, confirm).await
+    }
+
     #[tool(description = "List all calendars (local and CalDAV)")]
     async fn list_calendars(&self) -> Result<CallToolResult, McpError> {
         contacts::list_calendars(&self.bridge).await
