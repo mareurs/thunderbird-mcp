@@ -356,8 +356,10 @@ var mcpServer = class extends ExtensionCommon.ExtensionAPI {
               return null;
             }
 
-            function searchMessages(query, folderPath, sender, recipient, startDate, endDate, maxResults) {
+            function searchMessages(query, folderPath, sender, recipient, startDate, endDate, maxResults, searchBody) {
+              const BODY_FETCH_CAP = 20;
               const results = [];
+              const candidates = [];
               const lowerSender = sender ? sender.toLowerCase() : null;
               const lowerRecipient = recipient ? recipient.toLowerCase() : null;
 
@@ -375,19 +377,19 @@ var mcpServer = class extends ExtensionCommon.ExtensionAPI {
               let hasImapFolders = false;
 
               function searchFolder(folder) {
-                if (results.length >= SEARCH_COLLECTION_CAP) return;
+                if (searchBody ? candidates.length >= BODY_FETCH_CAP : results.length >= SEARCH_COLLECTION_CAP) return;
                 try {
-                  if (folder.server && folder.server.type === "imap") {
-                    hasImapFolders = true;
-                    try { folder.updateFolder(null); } catch (e) {
-                      console.debug("IMAP updateFolder failed:", e);
-                    }
+                  if (folder.server && folder.server.type === "imap") hasImapFolders = true;
+                  if (folder.hasSubFolders) {
+                    for (const sf of folder.subFolders) searchFolder(sf);
                   }
+                } catch {}
+                try {
                   const db = folder.msgDatabase;
                   if (!db) return;
 
                   for (const msgHdr of db.enumerateMessages()) {
-                    if (results.length >= SEARCH_COLLECTION_CAP) break;
+                    if (searchBody ? candidates.length >= BODY_FETCH_CAP : results.length >= SEARCH_COLLECTION_CAP) break;
 
                     const subject = (msgHdr.mime2DecodedSubject || msgHdr.subject || "").toLowerCase();
                     const author = (msgHdr.mime2DecodedAuthor || msgHdr.author || "").toLowerCase();
@@ -397,69 +399,105 @@ var mcpServer = class extends ExtensionCommon.ExtensionAPI {
 
                     if (startDateTs !== null && msgDateTs < startDateTs) continue;
                     if (endDateTs !== null && msgDateTs > endDateTs) continue;
-
                     if (lowerSender && !author.includes(lowerSender)) continue;
                     if (lowerRecipient && !recipients.includes(lowerRecipient) && !ccList.includes(lowerRecipient)) continue;
 
                     const textQuery = (query || "").toLowerCase();
-                    if (textQuery && !subject.includes(textQuery) && !author.includes(textQuery) &&
-                        !recipients.includes(textQuery) && !ccList.includes(textQuery)) continue;
+                    const headerMatch = textQuery && (subject.includes(textQuery) || author.includes(textQuery) ||
+                        recipients.includes(textQuery) || ccList.includes(textQuery));
 
-                    results.push({
+                    if (searchBody) {
+                      candidates.push({ msgHdr, headerMatch });
+                    } else {
+                      if (textQuery && !headerMatch) continue;
+                      results.push({
+                        id: msgHdr.messageId,
+                        subject: sanitizeStr(msgHdr.mime2DecodedSubject || msgHdr.subject),
+                        author: sanitizeStr(msgHdr.mime2DecodedAuthor || msgHdr.author),
+                        recipients: sanitizeStr(msgHdr.mime2DecodedRecipients || msgHdr.recipients),
+                        ccList: msgHdr.ccList,
+                        date: msgHdr.date ? new Date(msgHdr.date / 1000).toISOString() : null,
+                        folder: folder.prettyName,
+                        folderPath: folder.URI,
+                        read: msgHdr.isRead,
+                        flagged: msgHdr.isFlagged,
+                        _dateTs: msgDateTs
+                      });
+                    }
+                  }
+                } catch (e) { console.debug("searchMessages folder error", e); }
+              }
+
+              async function run() {
+                if (searchBody) {
+                  const hasNarrowingFilter = folderPath || sender || startDate || endDate;
+                  if (!hasNarrowingFilter) return { error: "search_body requires at least one narrowing filter: folder, sender, date_from, or date_to" };
+                }
+
+                if (folderPath) {
+                  const folder = MailServices.folderLookup.getFolderForURL(folderPath);
+                  if (!folder) return { error: `Folder not found: ${folderPath}` };
+                  searchFolder(folder);
+                } else {
+                  for (const account of MailServices.accounts.accounts) {
+                    try {
+                      const root = account?.incomingServer?.rootFolder;
+                      if (root) searchFolder(root);
+                    } catch {}
+                  }
+                }
+
+                if (searchBody) {
+                  const textQuery = (query || "").toLowerCase();
+                  for (const { msgHdr, headerMatch } of candidates) {
+                    if (results.length >= effectiveLimit) break;
+                    let bodySnippet;
+                    if (headerMatch) {
+                      // Header already matched — no body fetch needed
+                    } else {
+                      const body = await fetchBody(msgHdr);
+                      if (textQuery && !body.toLowerCase().includes(textQuery)) continue;
+                      bodySnippet = makeSnippet(body, textQuery);
+                    }
+                    const entry = {
                       id: msgHdr.messageId,
                       subject: sanitizeStr(msgHdr.mime2DecodedSubject || msgHdr.subject),
                       author: sanitizeStr(msgHdr.mime2DecodedAuthor || msgHdr.author),
                       recipients: sanitizeStr(msgHdr.mime2DecodedRecipients || msgHdr.recipients),
                       ccList: msgHdr.ccList,
                       date: msgHdr.date ? new Date(msgHdr.date / 1000).toISOString() : null,
-                      folder: folder.prettyName,
-                      folderPath: folder.URI,
+                      folderPath: msgHdr.folder ? msgHdr.folder.URI : null,
+                      folder: msgHdr.folder ? msgHdr.folder.prettyName : null,
                       read: msgHdr.isRead,
                       flagged: msgHdr.isFlagged,
-                      _dateTs: msgDateTs
-                    });
+                    };
+                    if (bodySnippet !== undefined) entry.bodySnippet = bodySnippet;
+                    results.push(entry);
                   }
-                } catch (e) {
-                  console.debug("Skipping inaccessible folder:", folder?.URI, e);
+                  results.sort((a, b) => (b._dateTs || 0) - (a._dateTs || 0));
+                  results.forEach(r => delete r._dateTs);
+                  return {
+                    messages: results.slice(0, effectiveLimit),
+                    total: results.length,
+                    ...(hasImapFolders ? { imapSyncPending: true } : {}),
+                  };
                 }
 
-                if (folder.hasSubFolders) {
-                  for (const subfolder of folder.subFolders) {
-                    if (results.length >= SEARCH_COLLECTION_CAP) break;
-                    searchFolder(subfolder);
-                  }
-                }
+                results.sort((a, b) => (b._dateTs || 0) - (a._dateTs || 0));
+                results.forEach(r => delete r._dateTs);
+                const messages = results.slice(0, effectiveLimit);
+                const searchNote = query
+                  ? "Search covers subject, sender, and recipient fields only — not message body."
+                  : undefined;
+                return {
+                  messages,
+                  total: results.length,
+                  ...(hasImapFolders ? { imapSyncPending: true } : {}),
+                  ...(searchNote ? { searchNote } : {}),
+                };
               }
 
-              if (folderPath) {
-                const folder = MailServices.folderLookup.getFolderForURL(folderPath);
-                if (!folder) return { error: `Folder not found: ${folderPath}` };
-                searchFolder(folder);
-              } else {
-                for (const account of MailServices.accounts.accounts) {
-                  if (results.length >= SEARCH_COLLECTION_CAP) break;
-                  searchFolder(account.incomingServer.rootFolder);
-                }
-              }
-
-              const seen = new Set();
-              const deduped = results.filter(r => { if (!r.id || seen.has(r.id)) return false; seen.add(r.id); return true; });
-              deduped.sort((a, b) => b._dateTs - a._dateTs);
-
-              const messages = deduped.slice(0, effectiveLimit).map(r => {
-                delete r._dateTs;
-                return r;
-              });
-              const searchNote = query
-                ? "Search covers subject, sender, and recipient fields only — not message body."
-                : undefined;
-              if (hasImapFolders) {
-                const result = { messages, imapSyncPending: true, note: "IMAP folder sync is async - results may not include the latest messages. Retry if expected messages are missing." };
-                if (searchNote) result.searchNote = searchNote;
-                return result;
-              }
-              if (searchNote) return { messages, searchNote };
-              return messages;
+              return run();
             }
 
             function searchContacts(query, limit) {
@@ -1482,6 +1520,26 @@ var mcpServer = class extends ExtensionCommon.ExtensionAPI {
               return s ? s.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '') : s;
             }
 
+            function fetchBody(msgHdr) {
+              return new Promise((resolve) => {
+                try {
+                  MsgHdrToMimeMessage(msgHdr, null, (aMsgHdr, aMimeMsg) => {
+                    try {
+                      resolve(aMimeMsg ? aMimeMsg.coerceBodyToPlaintext() || "" : "");
+                    } catch { resolve(""); }
+                  }, false, { examineEncryptedParts: true, saneBodySize: true });
+                } catch { resolve(""); }
+              });
+            }
+
+            function makeSnippet(text, query, maxLen = 200) {
+              const lower = text.toLowerCase();
+              const idx = lower.indexOf(query.toLowerCase());
+              if (idx === -1) return text.slice(0, maxLen).trim();
+              const start = Math.max(0, idx - 80);
+              return text.slice(start, start + maxLen).trim();
+            }
+
             function buildTerms(filter, conditions) {
               for (const cond of conditions) {
                 const term = filter.createTerm();
@@ -1758,8 +1816,8 @@ var mcpServer = class extends ExtensionCommon.ExtensionAPI {
             const ROUTES = {
               "/accounts/list":         async () => listAccounts(),
               "/folders/list":          async ({ account_id, folder_uri }) => listFolders(account_id, folder_uri),
-              "/messages/search":       async ({ query, folder, sender, recipient, date_from, date_to, max_results }) =>
-                                          searchMessages(query, folder, sender, recipient, date_from, date_to, max_results),
+              "/messages/search":       async ({ query, folder, sender, recipient, date_from, date_to, max_results, search_body }) =>
+                                          searchMessages(query, folder, sender, recipient, date_from, date_to, max_results, search_body),
               "/messages/get":          async ({ message_id, save_attachments }) => getMessage(message_id, save_attachments),
               "/messages/recent":       async ({ folder, since_date, limit, unread_only }) =>
                                           getRecentMessages(folder, since_date, limit, unread_only),
