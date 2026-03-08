@@ -20,7 +20,7 @@
 - [x] **`delete_contact`** — remove contacts from address book (permanent; confirmation gate required)
 
 ### Filters
-- [ ] **OR logic across senders** — currently conditions are ANDed; multi-sender OR requires creating one filter per sender
+- [x] **OR logic across senders** — use `booleanAnd: false` on a condition to OR it with the previous one
 
 ### Folders
 - [x] **`delete_folder`** — remove a folder by URI (moves to Trash)

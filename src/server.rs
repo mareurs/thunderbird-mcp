@@ -247,7 +247,7 @@ impl ThunderbirdMcp {
         #[schemars(description = "Filter name")]
         name: String,
         #[tool(param)]
-        #[schemars(description = "Array of condition objects with attrib/op/value (attrib: subject|from|body|to|cc|toOrCc; op: contains|doesntContain|is|isnt|beginsWith|endsWith)")]
+        #[schemars(description = "Array of condition objects with attrib/op/value (attrib: subject|from|body|to|cc|toOrCc; op: contains|doesntContain|is|isnt|beginsWith|endsWith); add booleanAnd: false to OR a condition with the previous one (default is AND)")]
         conditions: Value,
         #[tool(param)]
         #[schemars(description = "Array of action objects with type/value (type: moveToFolder|copyToFolder|markRead|markUnread|markFlagged|delete|addTag; moveToFolder/copyToFolder require value=folderURI)")]

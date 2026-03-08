@@ -25,7 +25,7 @@
 
 ## Filters
 
-- `create_filter` conditions are ANDed by default — create one filter per sender for OR-style grouping across multiple senders
+- `create_filter` conditions are ANDed by default; add `booleanAnd: false` to a condition to OR it with the previous one — use this for multi-sender filters instead of creating one filter per sender
 - `apply_filters` is async — the MCP response returns before messages are actually moved; wait a moment before verifying
 - `apply_filters` returns `warning` when the folder is IMAP — only locally cached messages are processed; messages not yet downloaded are skipped
 - Filters apply to future incoming mail only; to backfill existing messages: Tools → Message Filters → Run Now
