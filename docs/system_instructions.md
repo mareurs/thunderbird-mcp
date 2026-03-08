@@ -36,6 +36,7 @@
 - `list_address_books` returns `[{ uri, name, readOnly }]` — use `uri` as `address_book_uri` in `create_contact`
 - `create_contact` requires `address_book_uri` — call `list_address_books` first to find the right book; returns `{ id, displayName }` for the new contact
 - `update_contact` takes `contact_id` (UID) from `search_contacts` results; omit fields you don't want to change
+- `delete_contact` requires `confirm: true` to execute; pass `false` (or omit) to preview the contact details before committing to deletion — deletion is permanent
 
 ## Calendar
 

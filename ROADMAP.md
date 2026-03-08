@@ -17,7 +17,7 @@
 ### Contacts
 - [x] **`create_contact` / `update_contact`** — write-side contact management
 - [x] **`list_address_books`** — list address books with URIs for use with create_contact
-- [ ] **`delete_contact`** — remove contacts from address book
+- [x] **`delete_contact`** — remove contacts from address book (permanent; confirmation gate required)
 
 ### Filters
 - [ ] **OR logic across senders** — currently conditions are ANDed; multi-sender OR requires creating one filter per sender
