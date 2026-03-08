@@ -38,11 +38,13 @@ pub async fn search_messages(
     date_from: Option<String>,
     date_to: Option<String>,
     max_results: Option<u32>,
+    search_body: Option<bool>,
 ) -> Result<CallToolResult, McpError> {
     let r = bridge.call("/messages/search", json!({
         "query": query, "folder": folder, "sender": sender,
         "recipient": recipient, "date_from": date_from,
-        "date_to": date_to, "max_results": max_results
+        "date_to": date_to, "max_results": max_results,
+        "search_body": search_body,
     })).await.map_err(bridge_err)?;
     Ok(result_text(r))
 }
@@ -175,7 +177,24 @@ mod tests {
         search_messages(
             &mock_bridge(&server).await,
             Some("invoice".into()), None, Some("boss@corp.com".into()),
-            None, None, None, None,
+            None, None, None, None, None,
+        ).await.unwrap();
+        mock.assert_async().await;
+    }
+
+    #[tokio::test]
+    async fn search_messages_sends_search_body_true() {
+        let mut server = Server::new_async().await;
+        let mock = server.mock("POST", "/messages/search")
+            .match_body(mockito::Matcher::PartialJson(json!({
+                "query": "invoice",
+                "search_body": true
+            })))
+            .with_status(200).with_body("{}").create_async().await;
+        search_messages(
+            &mock_bridge(&server).await,
+            Some("invoice".into()), None, None,
+            None, None, None, None, Some(true),
         ).await.unwrap();
         mock.assert_async().await;
     }

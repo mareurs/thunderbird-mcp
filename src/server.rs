@@ -34,7 +34,7 @@ impl ThunderbirdMcp {
     }
 
     #[tool(description = "Search messages by subject, sender, recipient, date range or folder")]
-    async fn search_messages(
+async fn search_messages(
         &self,
         #[tool(param)]
         #[schemars(description = "Text to search in subject, sender, and recipient fields (not body)")]
@@ -57,8 +57,11 @@ impl ThunderbirdMcp {
         #[tool(param)]
         #[schemars(description = "Max results, default 20, max 100")]
         max_results: Option<u32>,
+        #[tool(param)]
+        #[schemars(description = "Also search message bodies (slower; requires opening each message)")]
+        search_body: Option<bool>,
     ) -> Result<CallToolResult, McpError> {
-        mail::search_messages(&self.bridge, query, folder, sender, recipient, date_from, date_to, max_results).await
+        mail::search_messages(&self.bridge, query, folder, sender, recipient, date_from, date_to, max_results, search_body).await
     }
 
     #[tool(description = "Read full email content, optionally save attachments to disk")]
