@@ -126,3 +126,165 @@ pub async fn create_folder(
     })).await.map_err(bridge_err)?;
     Ok(result_text(r))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use mockito::Server;
+    use serde_json::json;
+
+    async fn mock_bridge(server: &Server) -> Bridge {
+        Bridge::with_base_url("tok".to_string(), server.url())
+    }
+
+    #[tokio::test]
+    async fn list_accounts_hits_correct_endpoint() {
+        let mut server = Server::new_async().await;
+        let mock = server.mock("POST", "/accounts/list")
+            .with_status(200).with_body("{}").create_async().await;
+        list_accounts(&mock_bridge(&server).await).await.unwrap();
+        mock.assert_async().await;
+    }
+
+    #[tokio::test]
+    async fn list_folders_sends_account_id() {
+        let mut server = Server::new_async().await;
+        let mock = server.mock("POST", "/folders/list")
+            .match_body(mockito::Matcher::PartialJson(json!({"account_id": "acc1"})))
+            .with_status(200).with_body("{}").create_async().await;
+        list_folders(&mock_bridge(&server).await, Some("acc1".into()), None).await.unwrap();
+        mock.assert_async().await;
+    }
+
+    #[tokio::test]
+    async fn search_messages_sends_query_and_sender() {
+        let mut server = Server::new_async().await;
+        let mock = server.mock("POST", "/messages/search")
+            .match_body(mockito::Matcher::PartialJson(json!({"query": "invoice", "sender": "boss@corp.com"})))
+            .with_status(200).with_body("{}").create_async().await;
+        search_messages(
+            &mock_bridge(&server).await,
+            Some("invoice".into()), None, Some("boss@corp.com".into()),
+            None, None, None, None,
+        ).await.unwrap();
+        mock.assert_async().await;
+    }
+
+    #[tokio::test]
+    async fn get_message_sends_message_id() {
+        let mut server = Server::new_async().await;
+        let mock = server.mock("POST", "/messages/get")
+            .match_body(mockito::Matcher::PartialJson(json!({"message_id": "msg-42"})))
+            .with_status(200).with_body("{}").create_async().await;
+        get_message(&mock_bridge(&server).await, "msg-42".into(), None).await.unwrap();
+        mock.assert_async().await;
+    }
+
+    #[tokio::test]
+    async fn get_recent_messages_sends_limit_and_unread_only() {
+        let mut server = Server::new_async().await;
+        let mock = server.mock("POST", "/messages/recent")
+            .match_body(mockito::Matcher::PartialJson(json!({"limit": 5, "unread_only": true})))
+            .with_status(200).with_body("{}").create_async().await;
+        get_recent_messages(&mock_bridge(&server).await, None, Some(5), Some(true), None).await.unwrap();
+        mock.assert_async().await;
+    }
+
+    #[tokio::test]
+    async fn update_message_sends_read_and_flagged() {
+        let mut server = Server::new_async().await;
+        let mock = server.mock("POST", "/messages/update")
+            .match_body(mockito::Matcher::PartialJson(json!({"message_id": "m1", "read": true})))
+            .with_status(200).with_body("{}").create_async().await;
+        update_message(&mock_bridge(&server).await, "m1".into(), Some(true), None, None, None).await.unwrap();
+        mock.assert_async().await;
+    }
+
+    #[tokio::test]
+    async fn update_message_sends_move_to() {
+        let mut server = Server::new_async().await;
+        let mock = server.mock("POST", "/messages/update")
+            .match_body(mockito::Matcher::PartialJson(json!({
+                "message_id": "m1",
+                "move_to": "imap://user@host/Archive"
+            })))
+            .with_status(200).with_body("{}").create_async().await;
+        update_message(
+            &mock_bridge(&server).await,
+            "m1".into(), None, None,
+            Some("imap://user@host/Archive".into()), None,
+        ).await.unwrap();
+        mock.assert_async().await;
+    }
+
+    #[tokio::test]
+    async fn update_message_sends_trash() {
+        let mut server = Server::new_async().await;
+        let mock = server.mock("POST", "/messages/update")
+            .match_body(mockito::Matcher::PartialJson(json!({
+                "message_id": "m1",
+                "trash": true
+            })))
+            .with_status(200).with_body("{}").create_async().await;
+        update_message(
+            &mock_bridge(&server).await,
+            "m1".into(), None, None, None, Some(true),
+        ).await.unwrap();
+        mock.assert_async().await;
+    }
+
+    #[tokio::test]
+    async fn delete_messages_sends_ids() {
+        let mut server = Server::new_async().await;
+        let mock = server.mock("POST", "/messages/delete")
+            .match_body(mockito::Matcher::PartialJson(json!({"message_ids": ["a", "b"]})))
+            .with_status(200).with_body("{}").create_async().await;
+        delete_messages(&mock_bridge(&server).await, vec!["a".into(), "b".into()]).await.unwrap();
+        mock.assert_async().await;
+    }
+
+    #[tokio::test]
+    async fn delete_messages_by_filter_sends_folder_and_filters() {
+        let mut server = Server::new_async().await;
+        let mock = server.mock("POST", "/messages/delete-by-filter")
+            .match_body(mockito::Matcher::PartialJson(json!({
+                "folder_uri": "imap://user@host/INBOX",
+                "sender": "spam@bad.com"
+            })))
+            .with_status(200).with_body("{}").create_async().await;
+        delete_messages_by_filter(
+            &mock_bridge(&server).await,
+            "imap://user@host/INBOX".into(),
+            None, None, Some("spam@bad.com".into()), None,
+        ).await.unwrap();
+        mock.assert_async().await;
+    }
+
+    #[tokio::test]
+    async fn create_folder_sends_parent_and_name() {
+        let mut server = Server::new_async().await;
+        let mock = server.mock("POST", "/folders/create")
+            .match_body(mockito::Matcher::PartialJson(json!({"parent_uri": "imap://host/", "name": "Archive"})))
+            .with_status(200).with_body("{}").create_async().await;
+        create_folder(&mock_bridge(&server).await, "imap://host/".into(), "Archive".into()).await.unwrap();
+        mock.assert_async().await;
+    }
+
+    #[test]
+    fn result_text_produces_success_with_pretty_json() {
+        let v = json!({"key": "value"});
+        let result = result_text(v);
+        assert!(!result.content.is_empty());
+        let text = result.content[0].as_text().unwrap();
+        assert!(text.text.contains("\"key\""));
+        assert!(text.text.contains("\"value\""));
+    }
+
+    #[test]
+    fn bridge_err_maps_to_internal_error() {
+        use crate::bridge::BridgeError;
+        let e = BridgeError::ExtensionError("oops".into());
+        let mcp_err = bridge_err(e);
+        assert!(mcp_err.to_string().contains("oops"));
+    }
+}
