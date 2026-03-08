@@ -339,6 +339,55 @@ impl ThunderbirdMcp {
         contacts::search_contacts(&self.bridge, query, limit).await
     }
 
+    #[tool(description = "List all address books with their URIs, names, and read-only status")]
+    async fn list_address_books(&self) -> Result<CallToolResult, McpError> {
+        contacts::list_address_books(&self.bridge).await
+    }
+
+    #[tool(description = "Create a new contact in an address book")]
+    async fn create_contact(
+        &self,
+        #[tool(param)]
+        #[schemars(description = "URI of the address book to add the contact to (from list_address_books)")]
+        address_book_uri: String,
+        #[tool(param)]
+        #[schemars(description = "Contact email address")]
+        email: String,
+        #[tool(param)]
+        #[schemars(description = "First name")]
+        first_name: Option<String>,
+        #[tool(param)]
+        #[schemars(description = "Last name")]
+        last_name: Option<String>,
+        #[tool(param)]
+        #[schemars(description = "Display name (auto-derived from first/last name or email if omitted)")]
+        display_name: Option<String>,
+    ) -> Result<CallToolResult, McpError> {
+        contacts::create_contact(&self.bridge, address_book_uri, email, first_name, last_name, display_name).await
+    }
+
+    #[tool(description = "Update fields on an existing contact")]
+    async fn update_contact(
+        &self,
+        #[tool(param)]
+        #[schemars(description = "Contact UID from search_contacts results")]
+        contact_id: String,
+        #[tool(param)]
+        #[schemars(description = "New email address")]
+        email: Option<String>,
+        #[tool(param)]
+        #[schemars(description = "New first name")]
+        first_name: Option<String>,
+        #[tool(param)]
+        #[schemars(description = "New last name")]
+        last_name: Option<String>,
+        #[tool(param)]
+        #[schemars(description = "New display name")]
+        display_name: Option<String>,
+    ) -> Result<CallToolResult, McpError> {
+        contacts::update_contact(&self.bridge, contact_id, email, first_name, last_name, display_name).await
+    }
+
     #[tool(description = "List all calendars (local and CalDAV)")]
     async fn list_calendars(&self) -> Result<CallToolResult, McpError> {
         contacts::list_calendars(&self.bridge).await
