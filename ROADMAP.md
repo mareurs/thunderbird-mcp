@@ -11,7 +11,7 @@
 - [x] **`list_events`** — query events by calendar ID and date range using `cal.manager`
 
 ### Mail
-- [ ] **`get_message` body sanitization** — strip control characters in `get_message` body (same as already done for subject/author in search/recent)
+- [x] **`get_message` body sanitization** — strip control characters in `get_message` body (same as already done for subject/author in search/recent)
 - [ ] **`apply_filters` for IMAP** — filters only run on locally cached messages; no fix without async sync, but could add a warning or a "fetch + filter" workflow
 
 ### Contacts
