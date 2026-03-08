@@ -33,11 +33,11 @@ impl ThunderbirdMcp {
         mail::list_folders(&self.bridge, account_id, folder_uri).await
     }
 
-    #[tool(description = "Search messages by subject, sender, recipient, date range or folder")]
+    #[tool(description = "Search messages by subject, sender, recipient, date range, folder, or body content")]
 async fn search_messages(
         &self,
         #[tool(param)]
-        #[schemars(description = "Text to search in subject, sender, and recipient fields (not body)")]
+        #[schemars(description = "Text to search in subject, sender, and recipient fields; also searches body when search_body is true")]
         query: Option<String>,
         #[tool(param)]
         #[schemars(description = "Folder URI to scope search")]
@@ -58,7 +58,7 @@ async fn search_messages(
         #[schemars(description = "Max results, default 20, max 100")]
         max_results: Option<u32>,
         #[tool(param)]
-        #[schemars(description = "Also search message bodies (slower; requires opening each message)")]
+        #[schemars(description = "Set true to also search message bodies (requires at least one of: folder, sender, date_from, date_to); returns bodySnippet (≤200 chars) for body-matched messages; max 20 body fetches per call")]
         search_body: Option<bool>,
     ) -> Result<CallToolResult, McpError> {
         mail::search_messages(&self.bridge, query, folder, sender, recipient, date_from, date_to, max_results, search_body).await
