@@ -55,6 +55,18 @@ pub async fn update_contact(
     Ok(result_text(r))
 }
 
+pub async fn delete_contact(
+    bridge: &Bridge,
+    contact_id: String,
+    confirm: bool,
+) -> Result<CallToolResult, McpError> {
+    let r = bridge.call("/contacts/delete", json!({
+        "contact_id": contact_id,
+        "confirm": confirm,
+    })).await.map_err(bridge_err)?;
+    Ok(result_text(r))
+}
+
 pub async fn list_calendars(bridge: &Bridge) -> Result<CallToolResult, McpError> {
     let r = bridge.call("/calendars/list", json!({})).await.map_err(bridge_err)?;
     Ok(result_text(r))
@@ -244,6 +256,55 @@ mod tests {
             &mock_bridge(&server).await,
             "uid-123".into(),
             None, None, None, None,
+        ).await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn delete_contact_sends_contact_id_and_confirm() {
+        let mut server = Server::new_async().await;
+        let mock = server.mock("POST", "/contacts/delete")
+            .match_body(mockito::Matcher::PartialJson(json!({
+                "contact_id": "uid-123",
+                "confirm": true
+            })))
+            .with_status(200).with_body("{}").create_async().await;
+        delete_contact(
+            &mock_bridge(&server).await,
+            "uid-123".into(),
+            true,
+        ).await.unwrap();
+        mock.assert_async().await;
+    }
+
+    #[tokio::test]
+    async fn delete_contact_dry_run_sends_confirm_false() {
+        let mut server = Server::new_async().await;
+        let mock = server.mock("POST", "/contacts/delete")
+            .match_body(mockito::Matcher::PartialJson(json!({
+                "contact_id": "uid-456",
+                "confirm": false
+            })))
+            .with_status(200).with_body("{}").create_async().await;
+        delete_contact(
+            &mock_bridge(&server).await,
+            "uid-456".into(),
+            false,
+        ).await.unwrap();
+        mock.assert_async().await;
+    }
+
+    #[tokio::test]
+    async fn delete_contact_propagates_bridge_error() {
+        let mut server = Server::new_async().await;
+        let _mock = server.mock("POST", "/contacts/delete")
+            .with_status(200)
+            .with_body("{\"error\": \"contact not found\"}")
+            .create_async().await;
+        let result = delete_contact(
+            &mock_bridge(&server).await,
+            "uid-123".into(),
+            true,
         ).await;
         assert!(result.is_err());
     }
