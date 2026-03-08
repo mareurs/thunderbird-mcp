@@ -15,7 +15,8 @@
 - [ ] **`apply_filters` for IMAP** — filters only run on locally cached messages; no fix without async sync, but could add a warning or a "fetch + filter" workflow
 
 ### Contacts
-- [ ] **`create_contact` / `update_contact`** — write-side contact management
+- [x] **`create_contact` / `update_contact`** — write-side contact management
+- [x] **`list_address_books`** — list address books with URIs for use with create_contact
 - [ ] **`delete_contact`** — remove contacts from address book
 
 ### Filters

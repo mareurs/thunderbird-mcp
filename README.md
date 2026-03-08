@@ -18,7 +18,7 @@ AI assistant ──stdio──▶ thunderbird-mcp (Rust) ──HTTP :45678──
 | **Compose** | `send_email`, `reply_to_message`, `forward_message` |
 | **Folders** | `list_accounts`, `list_folders`, `create_folder`, `delete_folder`, `delete_messages` |
 | **Filters** | `list_filters`, `create_filter`, `update_filter`, `delete_filter`, `apply_filters` |
-| **Contacts** | `search_contacts` |
+| **Contacts** | `search_contacts`, `list_address_books`, `create_contact`, `update_contact` |
 | **Calendar** | `list_calendars`, `list_events`, `create_event` |
 
 ## Requirements
