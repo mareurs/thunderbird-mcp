@@ -43,4 +43,24 @@ mod tests {
         let input = "\x00\x01\x02\x03";
         assert_eq!(sanitize_str(input), "");
     }
+
+    #[test]
+    fn strips_vertical_tab_and_form_feed() {
+        // \x0b (VT) and \x0c (FF) must be stripped — they break JSON parsing
+        assert_eq!(sanitize_str("foo\x0bbar"), "foobar");
+        assert_eq!(sanitize_str("foo\x0cbar"), "foobar");
+    }
+
+    #[test]
+    fn boundary_0x1f_stripped_0x20_kept() {
+        // 0x1f is the last control char that must be stripped; 0x20 (space) must survive
+        assert_eq!(sanitize_str("\x1f "), " ");
+    }
+
+    #[test]
+    fn preserves_bare_carriage_return() {
+        // \r (0x0d) alone is allowed — some email bodies use CR-only line endings
+        let input = "foo\rbar";
+        assert_eq!(sanitize_str(input), "foo\rbar");
+    }
 }

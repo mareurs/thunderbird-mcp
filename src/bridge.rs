@@ -81,7 +81,7 @@ mod tests {
     #[tokio::test]
     async fn returns_extension_error_on_error_field() {
         let mut server = Server::new_async().await;
-        server.mock("POST", "/messages/search")
+        let mock = server.mock("POST", "/messages/search")
             .with_status(200)
             .with_body(r#"{"error": "folder not found"}"#)
             .create_async().await;
@@ -89,6 +89,7 @@ mod tests {
         let bridge = mock_bridge(&server).await;
         let err = bridge.call("/messages/search", json!({})).await.unwrap_err();
         assert!(matches!(err, BridgeError::ExtensionError(ref s) if s == "folder not found"));
+        mock.assert_async().await;
     }
 
     #[tokio::test]
@@ -115,5 +116,33 @@ mod tests {
         let bridge = mock_bridge(&server).await;
         let _ = bridge.call("/accounts/list", json!({})).await;
         mock.assert_async().await;
+    }
+
+    #[tokio::test]
+    async fn sanitizes_control_chars_before_json_parse() {
+        // Email bodies can contain control chars; they must be stripped before JSON parse
+        let mut server = Server::new_async().await;
+        let mock = server.mock("POST", "/messages/get")
+            .with_status(200)
+            .with_body("{\"subject\": \"hel\x01lo\"}")
+            .create_async().await;
+
+        let bridge = mock_bridge(&server).await;
+        let result = bridge.call("/messages/get", json!({})).await.unwrap();
+        assert_eq!(result["subject"].as_str().unwrap(), "hello");
+        mock.assert_async().await;
+    }
+
+    #[tokio::test]
+    async fn returns_invalid_json_error_on_malformed_response() {
+        let mut server = Server::new_async().await;
+        server.mock("POST", "/accounts/list")
+            .with_status(200)
+            .with_body("not valid json at all")
+            .create_async().await;
+
+        let bridge = mock_bridge(&server).await;
+        let err = bridge.call("/accounts/list", json!({})).await.unwrap_err();
+        assert!(matches!(err, BridgeError::InvalidJson(_)));
     }
 }
