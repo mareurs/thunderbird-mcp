@@ -127,6 +127,16 @@ pub async fn create_folder(
     Ok(result_text(r))
 }
 
+pub async fn delete_folder(
+    bridge: &Bridge,
+    folder_uri: String,
+) -> Result<CallToolResult, McpError> {
+    let r = bridge.call("/folders/delete", json!({
+        "folder_uri": folder_uri
+    })).await.map_err(bridge_err)?;
+    Ok(result_text(r))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -284,6 +294,29 @@ mod tests {
             .with_status(200).with_body("{}").create_async().await;
         create_folder(&mock_bridge(&server).await, "imap://host/".into(), "Archive".into()).await.unwrap();
         mock.assert_async().await;
+    }
+
+    #[tokio::test]
+    async fn delete_folder_sends_folder_uri() {
+        let mut server = Server::new_async().await;
+        let mock = server.mock("POST", "/folders/delete")
+            .match_body(mockito::Matcher::PartialJson(json!({
+                "folder_uri": "imap://user@host/Archive"
+            })))
+            .with_status(200).with_body("{}").create_async().await;
+        delete_folder(&mock_bridge(&server).await, "imap://user@host/Archive".into()).await.unwrap();
+        mock.assert_async().await;
+    }
+
+    #[tokio::test]
+    async fn delete_folder_propagates_bridge_error() {
+        let mut server = Server::new_async().await;
+        let _mock = server.mock("POST", "/folders/delete")
+            .with_status(200)
+            .with_body("{\"error\": \"folder not found\"}")
+            .create_async().await;
+        let result = delete_folder(&mock_bridge(&server).await, "imap://user@host/Archive".into()).await;
+        assert!(result.is_err());
     }
 
     #[test]
