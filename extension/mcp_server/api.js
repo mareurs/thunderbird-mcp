@@ -546,6 +546,25 @@ var mcpServer = class extends ExtensionCommon.ExtensionAPI {
               } catch (e) { return { error: e.toString() }; }
             }
 
+            function deleteContact(contactId, confirm) {
+              try {
+                if (typeof contactId !== "string" || !contactId) return { error: "contact_id must be a non-empty string" };
+
+                for (const book of MailServices.ab.directories) {
+                  for (const card of book.childCards) {
+                    if (card.UID === contactId) {
+                      if (confirm !== true) {
+                        return { confirm_required: true, contact: { id: contactId, displayName: card.displayName, email: card.primaryEmail } };
+                      }
+                      book.deleteCards([card]);
+                      return { success: true, id: contactId };
+                    }
+                  }
+                }
+                return { error: `Contact not found: ${contactId}` };
+              } catch (e) { return { error: e.toString() }; }
+            }
+
             function listCalendars() {
               if (!cal) return { error: "Calendar not available" };
               try {
@@ -1767,6 +1786,7 @@ var mcpServer = class extends ExtensionCommon.ExtensionAPI {
               "/contacts/list-books":   async () => listAddressBooks(),
               "/contacts/create":       async ({ address_book_uri, email, first_name, last_name, display_name }) => createContact(address_book_uri, email, first_name, last_name, display_name),
               "/contacts/update":       async ({ contact_id, email, first_name, last_name, display_name }) => updateContact(contact_id, email, first_name, last_name, display_name),
+              "/contacts/delete":       async ({ contact_id, confirm }) => deleteContact(contact_id, confirm),
               "/calendars/list":        async () => listCalendars(),
               "/calendars/list-events":  async ({ calendar_id, date_from, date_to, limit }) =>
                                            listEvents(calendar_id, date_from, date_to, limit),
