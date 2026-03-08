@@ -43,9 +43,73 @@ curl -s -X POST http://localhost:45678/accounts/list \
 cargo test
 ```
 
+## Security — Public Repository
+
+This project is **public on GitHub**. Before every commit:
+- No personal email addresses, account IDs, or contact names
+- No API keys, tokens, passwords, or credentials
+- No server hostnames, IPs, or personal infrastructure details
+- No real email content, folder names, or conversation data
+- `.mcp.json` is gitignored — never commit it
+- Run `git diff --staged` and review carefully before committing
+
+## Rust Coding Standards
+
+### Ownership first
+- Restructure data and function signatures to satisfy the borrow checker.
+  Never reach for `.clone()` as a first resort — only clone when semantically
+  appropriate (the clone represents intentional duplication, not a workaround).
+- Design ownership topology before writing implementations. Ask: who owns this
+  data, and what borrows it?
+
+### Error handling
+- All fallible functions return `Result<T, E>`. Never use `.unwrap()` in
+  library code. In application code, only use `.unwrap()` where a panic is
+  genuinely the correct behavior and document why.
+- Use `anyhow` for application-level error propagation, `thiserror` for
+  library error types.
+- Propagate errors with `?`. Avoid nested match blocks for error handling.
+
+### Iterators over loops
+- Prefer iterator adapters (`.map()`, `.filter()`, `.fold()`, `.collect()`)
+  over explicit `for` loops when the intent is a transformation pipeline.
+- Use `.iter()` / `.iter_mut()` / `.into_iter()` correctly — do not
+  implicitly rely on auto-deref behavior.
+
+### Generics vs trait objects
+- Default to generics (`fn foo<T: Trait>(x: T)`) for zero-cost dispatch.
+- Only use `Box<dyn Trait>` / `Arc<dyn Trait>` when you need runtime
+  polymorphism (heterogeneous collections, plugin systems, dynamic dispatch).
+  Always comment why dynamic dispatch is needed.
+
+### Concurrency
+- Before reaching for `Arc<Mutex<T>>`, ask whether ownership can be
+  structured to avoid shared state entirely.
+- Prefer message passing (channels) over shared state for complex coordination.
+- Use `tokio` for async I/O. Never block inside async functions.
+
+### Clippy
+- All code must pass `cargo clippy -- -D warnings`.
+- When clippy suggests an alternative, prefer it unless there's a documented
+  reason not to.
+
+### Lifetimes
+- Annotate lifetimes explicitly when the compiler cannot infer them and
+  explain the relationship in a comment.
+- Prefer owned types in struct fields over references where the struct
+  needs to be self-contained or sent across threads.
+
+### unsafe
+- Never write `unsafe` without a `// SAFETY:` comment explaining the
+  invariants being upheld.
+- Prefer safe abstractions. Reach for `unsafe` only when there is no
+  safe alternative and the performance gain is measured and documented.
+
 ## Hard Rules
 
 - **If you modify MCP tool schemas, action/condition formats, or extension logic — you MUST update `docs/system_instructions.md` and the `instructions` example in `README.md` to reflect the change.** (`.mcp.json` is gitignored — users create it locally from the README example.)
+
+- **Token awareness** — Tool responses are fed directly into AI context windows. Never return full email bodies in list/search results; always use short excerpts (≤200 chars, centered on the match). Return counts and IDs first; let the caller decide whether to fetch full content via `get_message`. Prefer tight result caps over unbounded lists. Every new tool response field that could contain free-form text must have a documented size bound.
 
 ## Known Issues
 
