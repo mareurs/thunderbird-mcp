@@ -261,6 +261,22 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn delete_messages_by_filter_with_only_folder_uri() {
+        let mut server = Server::new_async().await;
+        let mock = server.mock("POST", "/messages/delete-by-filter")
+            .match_body(mockito::Matcher::PartialJson(json!({
+                "folder_uri": "imap://user@host/INBOX"
+            })))
+            .with_status(200).with_body("{}").create_async().await;
+        delete_messages_by_filter(
+            &mock_bridge(&server).await,
+            "imap://user@host/INBOX".into(),
+            None, None, None, None,
+        ).await.unwrap();
+        mock.assert_async().await;
+    }
+
+    #[tokio::test]
     async fn create_folder_sends_parent_and_name() {
         let mut server = Server::new_async().await;
         let mock = server.mock("POST", "/folders/create")
