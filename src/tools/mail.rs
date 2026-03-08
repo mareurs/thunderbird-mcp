@@ -296,6 +296,49 @@ mod tests {
         assert!(text.text.contains("\"value\""));
     }
 
+    #[tokio::test]
+    async fn update_message_propagates_bridge_error() {
+        let mut server = Server::new_async().await;
+        let _mock = server.mock("POST", "/messages/update")
+            .with_status(200)
+            .with_body("{\"error\": \"permission denied\"}")
+            .create_async().await;
+        let result = update_message(
+            &mock_bridge(&server).await,
+            "m1".into(), None, None, None, None,
+        ).await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn delete_messages_propagates_bridge_error() {
+        let mut server = Server::new_async().await;
+        let _mock = server.mock("POST", "/messages/delete")
+            .with_status(200)
+            .with_body("{\"error\": \"not found\"}")
+            .create_async().await;
+        let result = delete_messages(
+            &mock_bridge(&server).await,
+            vec!["m1".into()],
+        ).await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn delete_messages_by_filter_propagates_bridge_error() {
+        let mut server = Server::new_async().await;
+        let _mock = server.mock("POST", "/messages/delete-by-filter")
+            .with_status(200)
+            .with_body("{\"error\": \"folder not found\"}")
+            .create_async().await;
+        let result = delete_messages_by_filter(
+            &mock_bridge(&server).await,
+            "imap://user@host/INBOX".into(),
+            None, None, None, None,
+        ).await;
+        assert!(result.is_err());
+    }
+
     #[test]
     fn bridge_err_maps_to_internal_error() {
         use crate::bridge::BridgeError;
