@@ -1,29 +1,16 @@
 # Thunderbird MCP — Roadmap
 
-## Released
+For shipped features, see [FEATURES.md](FEATURES.md).
 
-- [x] **v0.1.0** — 20 tools across mail, compose, folders, filters, contacts, and calendar
-- [x] **Published to ATN** — available at [addons.thunderbird.net/en-US/thunderbird/addon/mcp-server/](https://addons.thunderbird.net/en-US/thunderbird/addon/mcp-server/)
+## Pending
 
-## Planned Features
+### Needs Design (complex)
 
-### Calendar
-- [x] **`list_events`** — query events by calendar ID and date range using `cal.manager`
+- **IMAP staleness** — folder contents lag until Thunderbird syncs; no clean fix without triggering async sync before search/filter operations. Needs brainstorming.
+- **`apply_filters` full IMAP fix** — warning is returned today, but filters still only run on locally cached messages. A "fetch + filter" workflow would require async sync.
 
-### Mail
-- [x] **`get_message` body sanitization** — strip control characters in `get_message` body (same as already done for subject/author in search/recent)
-- [ ] **`apply_filters` for IMAP** — filters only run on locally cached messages; no fix without async sync, but could add a warning or a "fetch + filter" workflow
+### Future Ideas
 
-### Contacts
-- [x] **`create_contact` / `update_contact`** — write-side contact management
-- [x] **`list_address_books`** — list address books with URIs for use with create_contact
-- [x] **`delete_contact`** — remove contacts from address book (permanent; confirmation gate required)
-
-### Filters
-- [x] **OR logic across senders** — use `booleanAnd: false` on a condition to OR it with the previous one
-
-### Folders
-- [x] **`delete_folder`** — remove a folder by URI (moves to Trash)
-
-### Infrastructure
-- [x] **`list_events` MCP tool in Rust** — wired through `src/server.rs` and `src/tools/contacts.rs`
+- **`delete_contact`** batch delete — currently one at a time by UID
+- **OR logic across filter groups** — today `booleanAnd: false` ORs adjacent conditions; true grouped OR (e.g., OR between condition sets) is not supported by Thunderbird's filter model
+- **`search_messages` body search beyond 20** — current cap is 20 body fetches per call; a streaming or paginated approach could remove the cap

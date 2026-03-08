@@ -14,10 +14,10 @@ AI assistant ──stdio──▶ thunderbird-mcp (Rust) ──HTTP :45678──
 
 | Category | Tools |
 |----------|-------|
-| **Mail** | `get_recent_messages`, `search_messages`, `get_message`, `update_message` |
-| **Compose** | `send_email`, `reply_to_message`, `forward_message` |
-| **Folders** | `list_accounts`, `list_folders`, `create_folder`, `delete_folder`, `delete_messages` |
-| **Filters** | `list_filters`, `create_filter`, `update_filter`, `delete_filter`, `apply_filters` |
+| **Mail** | `get_recent_messages`, `search_messages`, `get_message`, `update_message`, `delete_messages`, `delete_messages_by_filter` |
+| **Compose** | `send_mail`, `reply_to_message`, `forward_message` |
+| **Folders** | `list_accounts`, `list_folders`, `create_folder`, `delete_folder` |
+| **Filters** | `list_filters`, `create_filter`, `update_filter`, `delete_filter`, `reorder_filters`, `apply_filters` |
 | **Contacts** | `search_contacts`, `list_address_books`, `create_contact`, `update_contact`, `delete_contact` |
 | **Calendar** | `list_calendars`, `list_events`, `create_event` |
 
@@ -74,7 +74,7 @@ For **Claude Code**, also add the `instructions` field — see [docs/system_inst
 ## How It Works
 
 1. The Rust binary reads the auth token from `~/.thunderbird-mcp-auth` at startup.
-2. It exposes an MCP server over stdio, registering all 20 tools.
+2. It exposes an MCP server over stdio, registering all tools.
 3. Each tool call translates to a Bearer-authenticated HTTP POST to the extension.
 4. The extension executes the operation using Thunderbird's XPCOM/WebExtension APIs and returns JSON.
 5. The Rust binary sanitizes the response (strips control characters) and returns it to the MCP client.
