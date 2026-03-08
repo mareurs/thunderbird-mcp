@@ -21,6 +21,7 @@
 
 - `create_folder` requires `parent_uri` to be an existing folder URI (e.g. INBOX), not the account root
 - `create_folder` returns `path: null` — call `list_folders` after creation to get the real URI
+- `delete_folder` moves the folder to the account Trash — it does not permanently delete; to permanently remove, empty Trash afterward
 
 ## Filters
 
