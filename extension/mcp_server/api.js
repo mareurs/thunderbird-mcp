@@ -1671,11 +1671,13 @@ var mcpServer = class extends ExtensionCommon.ExtensionAPI {
                 for (let i = 0; i < filterList.filterCount; i++) {
                   if (filterList.getFilterAt(i).enabled) enabledCount++;
                 }
+                const isImap = folder.server && folder.server.type === "imap";
                 return {
                   success: true,
                   message: "Filters applied (processing may take a moment)",
                   folder: folderUri,
                   enabledFilters: enabledCount,
+                  ...(isImap ? { warning: "IMAP folder: filters only apply to locally cached messages; messages not yet downloaded are skipped" } : {}),
                 };
               } catch (e) { return { error: e.toString() }; }
             }
