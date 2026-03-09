@@ -120,7 +120,7 @@ mod tests {
 
     #[tokio::test]
     async fn sanitizes_control_chars_before_json_parse() {
-        // Email bodies can contain control chars; they must be stripped before JSON parse
+        // Email bodies can contain control chars; they must be escaped before JSON parse
         let mut server = Server::new_async().await;
         let mock = server.mock("POST", "/messages/get")
             .with_status(200)
@@ -129,7 +129,7 @@ mod tests {
 
         let bridge = mock_bridge(&server).await;
         let result = bridge.call("/messages/get", json!({})).await.unwrap();
-        assert_eq!(result["subject"].as_str().unwrap(), "hello");
+        assert_eq!(result["subject"].as_str().unwrap(), "hel\u{1}lo");
         mock.assert_async().await;
     }
 
