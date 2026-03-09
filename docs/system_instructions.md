@@ -15,7 +15,10 @@
 
 ## Compose
 
-- `send_email`, `reply_to_message`, and `forward_message` open a compose window for user review — they do not send silently
+- `send_mail`, `reply_to_message`, and `forward_message` open a compose window for user review — they do not send silently
+- All three accept an optional `attachments` parameter: a list of absolute file paths to attach (e.g. `["/home/user/doc.pdf"]`)
+- Attachments are added after the compose window opens; blocked paths include `/etc`, `/proc`, `/sys`, `/dev`, `/root`, `.ssh`, `.gnupg`, `.aws`; max 50 MB per file
+- To attach files from a previous email, first use `get_message` with `save_attachments: true` to save them to disk, then pass the returned `filePath` values to the compose tool's `attachments` parameter
 - `reply_to_message` with `reply_all: true` includes all recipients
 
 ## Folders
