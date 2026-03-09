@@ -421,6 +421,7 @@ var mcpServer = class extends ExtensionCommon.ExtensionAPI {
                         folderPath: folder.URI,
                         read: msgHdr.isRead,
                         flagged: msgHdr.isFlagged,
+                        hasAttachments: !!(msgHdr.flags & 0x10000000),
                         _dateTs: msgDateTs
                       });
                     }
@@ -470,6 +471,7 @@ var mcpServer = class extends ExtensionCommon.ExtensionAPI {
                       folder: msgHdr.folder ? msgHdr.folder.prettyName : null,
                       read: msgHdr.isRead,
                       flagged: msgHdr.isFlagged,
+                      hasAttachments: !!(msgHdr.flags & 0x10000000),
                     };
                     if (bodySnippet !== undefined) entry.bodySnippet = bodySnippet;
                     results.push(entry);
@@ -1208,6 +1210,7 @@ var mcpServer = class extends ExtensionCommon.ExtensionAPI {
                       folderPath: folder.URI,
                       read: msgHdr.isRead,
                       flagged: msgHdr.isFlagged,
+                      hasAttachments: !!(msgHdr.flags & 0x10000000),
                       _dateTs: msgDateTs
                     });
                   }

@@ -15,7 +15,7 @@ AI assistant ──stdio──▶ thunderbird-mcp (Rust) ──HTTP :45678──
 | Category | Tools |
 |----------|-------|
 | **Mail** | `get_recent_messages`, `search_messages`, `get_message`, `update_message`, `delete_messages`, `delete_messages_by_filter` |
-| **Compose** | `send_mail`, `reply_to_message`, `forward_message` |
+| **Compose** | `send_mail`, `reply_to_message`, `forward_message` — all support file attachments |
 | **Folders** | `list_accounts`, `list_folders`, `create_folder`, `delete_folder` |
 | **Filters** | `list_filters`, `create_filter`, `update_filter`, `delete_filter`, `reorder_filters`, `apply_filters` |
 | **Contacts** | `search_contacts`, `list_address_books`, `create_contact`, `update_contact`, `delete_contact` |
