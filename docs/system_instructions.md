@@ -8,6 +8,7 @@
 - Gmail duplicates messages across labels — always scope `get_recent_messages` / `search_messages` to a specific folder (e.g. INBOX)
 - IMAP results may be stale (`imapSyncPending: true`) — retry if expected messages are missing
 - `search_messages` searches headers (subject, from, to, cc) by default; set `search_body: true` to also search message bodies — requires at least one narrowing filter (folder, sender, date_from, or date_to); body-matched messages include a `bodySnippet` field (≤200 chars); max 20 body fetches per call
+- `get_message`, `get_recent_messages`, and `search_messages` include `replyTo` field — contains the Reply-To header address (null if not set); use this instead of `author` when composing replies to messages with a different reply-to address
 - `get_message` body can be very large (5000+ chars for newsletters) — use `search_messages` to filter before fetching full bodies
 - `update_message` supports `read`, `flagged`, `move_to`, and `trash` fields — omit any field you don't want to change
 - `delete_messages_by_filter` deletes all messages in a folder matching date/sender/query filters in one call — requires `folder_uri` plus at least one of `date_from`, `date_to`, `sender`, or `query`; `date_from` with a date-only string starts at midnight (beginning of that day); `date_to` with a date-only string includes the full day; returns `{ deleted: N }` or `{ deleted: 0, note: "No messages matched the filters" }`
