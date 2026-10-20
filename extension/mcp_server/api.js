@@ -18,6 +18,8 @@ const ATTACHMENT_DIR = "/tmp/thunderbird-mcp";
 const DEFAULT_MAX_RESULTS = 50;
 const MAX_SEARCH_RESULTS_CAP = 200;
 const SEARCH_COLLECTION_CAP = 1000;
+// A body fetch on a message that is not stored offline can hang without ever calling back.
+const BODY_FETCH_TIMEOUT_MS = 15000;
 
 const resProto = Cc[
   "@mozilla.org/network/protocol;1?name=resource"
@@ -294,6 +296,41 @@ var mcpServer = class extends ExtensionCommon.ExtensionAPI {
               return { msgHdr, folder, db, isImap };
             }
 
+            /** True if the message body is in the local offline store. */
+            function isStoredOffline(msgHdr) {
+              try { return !!msgHdr.folder.hasMsgOffline(msgHdr.messageKey); } catch { return false; }
+            }
+
+            /**
+             * Like findMessageAnyFolder, but prefers a copy whose body is stored offline.
+             * Gmail keeps one message in several folders (label folder, All Mail, a stale INBOX copy).
+             * Reading the body of a copy that is not stored offline can fail or never call back,
+             * while another copy of the same message reads fine.
+             * Falls back to the first copy when no copy is stored offline.
+             */
+            function findBestMessageCopy(messageId) {
+              const first = findMessageAnyFolder(messageId);
+              if (first.error || isStoredOffline(first.msgHdr)) return first;
+
+              let best = null;
+              const walk = (folder) => {
+                if (best) return;
+                try {
+                  const db = folder.msgDatabase;
+                  const hdr = db && db.getMsgHdrForMessageID(messageId);
+                  if (hdr && isStoredOffline(hdr)) {
+                    best = { msgHdr: hdr, folder, db, isImap: !!(folder.server && folder.server.type === "imap") };
+                    return;
+                  }
+                } catch {}
+                try { if (folder.hasSubFolders) for (const sub of folder.subFolders) walk(sub); } catch {}
+              };
+              for (const account of MailServices.accounts.accounts) {
+                try { walk(account.incomingServer.rootFolder); } catch {}
+              }
+              return best || first;
+            }
+
             /**
              * Searches all accounts for a message by ID.
              * Used when no folderPath is provided (Rust tools only send message_id).
@@ -356,6 +393,7 @@ var mcpServer = class extends ExtensionCommon.ExtensionAPI {
               return null;
             }
 
+
             function searchMessages(query, folderPath, sender, recipient, startDate, endDate, maxResults, searchBody) {
               const BODY_FETCH_CAP = 20;
               const results = [];
@@ -377,7 +415,7 @@ var mcpServer = class extends ExtensionCommon.ExtensionAPI {
               let hasImapFolders = false;
 
               function searchFolder(folder) {
-                if (searchBody ? candidates.length >= BODY_FETCH_CAP : results.length >= SEARCH_COLLECTION_CAP) return;
+                if ((searchBody ? candidates.length : results.length) >= SEARCH_COLLECTION_CAP) return;
                 try {
                   if (folder.server && folder.server.type === "imap") hasImapFolders = true;
                   if (folder.hasSubFolders) {
@@ -389,7 +427,7 @@ var mcpServer = class extends ExtensionCommon.ExtensionAPI {
                   if (!db) return;
 
                   for (const msgHdr of db.enumerateMessages()) {
-                    if (searchBody ? candidates.length >= BODY_FETCH_CAP : results.length >= SEARCH_COLLECTION_CAP) break;
+                    if ((searchBody ? candidates.length : results.length) >= SEARCH_COLLECTION_CAP) break;
 
                     const subject = (msgHdr.mime2DecodedSubject || msgHdr.subject || "").toLowerCase();
                     const author = (msgHdr.mime2DecodedAuthor || msgHdr.author || "").toLowerCase();
@@ -407,7 +445,7 @@ var mcpServer = class extends ExtensionCommon.ExtensionAPI {
                         recipients.includes(textQuery) || ccList.includes(textQuery));
 
                     if (searchBody) {
-                      candidates.push({ msgHdr, headerMatch });
+                      candidates.push({ msgHdr, headerMatch, dateTs: msgDateTs });
                     } else {
                       if (textQuery && !headerMatch) continue;
                       results.push({
@@ -449,13 +487,34 @@ var mcpServer = class extends ExtensionCommon.ExtensionAPI {
 
                 if (searchBody) {
                   const textQuery = (query || "").toLowerCase();
-                  for (const { msgHdr, headerMatch } of candidates) {
+                  // Gmail shows one message in several folders: keep one copy per Message-ID,
+                  // preferring a copy whose body is stored offline (the others may fail to read),
+                  // then scan newest first so the fetch cap goes to recent mail.
+                  const byId = new Map();
+                  for (const cand of candidates) {
+                    const kept = byId.get(cand.msgHdr.messageId);
+                    if (!kept || (!isStoredOffline(kept.msgHdr) && isStoredOffline(cand.msgHdr))) {
+                      byId.set(cand.msgHdr.messageId, cand);
+                    }
+                  }
+                  const unique = [...byId.values()];
+                  unique.sort((a, b) => b.dateTs - a.dateTs);
+                  const bodyScan = { candidates: unique.length, fetched: 0, skipped: 0, emptyBodies: 0, reasons: {} };
+                  for (const { msgHdr, headerMatch } of unique) {
                     if (results.length >= effectiveLimit) break;
                     let bodySnippet;
                     if (headerMatch) {
                       // Header already matched — no body fetch needed
                     } else {
-                      const body = await fetchBody(msgHdr);
+                      if (bodyScan.fetched >= BODY_FETCH_CAP) { bodyScan.skipped++; continue; }
+                      const fetched = await fetchBody(msgHdr);
+                      const body = fetched.text;
+                      bodyScan.fetched++;
+                      if (!body) bodyScan.emptyBodies++;
+                      // Bounded: at most 8 distinct reasons, each <= ~100 chars.
+                      let reasonKey = `${fetched.reason}${fetched.offline ? " (offline)" : ""}`;
+                      if (!(reasonKey in bodyScan.reasons) && Object.keys(bodyScan.reasons).length >= 8) reasonKey = "other";
+                      bodyScan.reasons[reasonKey] = (bodyScan.reasons[reasonKey] || 0) + 1;
                       if (textQuery && !body.toLowerCase().includes(textQuery)) continue;
                       bodySnippet = makeSnippet(body, textQuery);
                     }
@@ -479,6 +538,13 @@ var mcpServer = class extends ExtensionCommon.ExtensionAPI {
                   return {
                     messages: results.slice(0, effectiveLimit),
                     total: results.length,
+                    bodyScan: {
+                      ...bodyScan,
+                      truncated: bodyScan.skipped > 0,
+                      ...(bodyScan.skipped > 0 ? {
+                        note: `Body scan stopped after ${BODY_FETCH_CAP} fetches; ${bodyScan.skipped} candidate(s) were not scanned. Narrow the date range, sender or folder.`,
+                      } : {}),
+                    },
                     ...(hasImapFolders ? { imapSyncPending: true } : {}),
                   };
                 }
@@ -773,25 +839,63 @@ var mcpServer = class extends ExtensionCommon.ExtensionAPI {
               }
             }
 
+            // Content types and body lengths only, never body text. Bounded to
+            // MAX_NODES nodes with contentType <= 80 chars each (a few KB at most).
+            function describeMimeTree(part, depth = 0, counter = { n: 0 }) {
+              const MAX_DEPTH = 6, MAX_NODES = 40;
+              counter.n++;
+              const node = {
+                contentType: sanitizeStr(String(part.contentType || "").split(";")[0].trim().toLowerCase()).slice(0, 80),
+                bodyLength: typeof part.body === "string" ? part.body.length : null,
+              };
+              if (part.parts && part.parts.length) {
+                if (depth >= MAX_DEPTH) { node.truncated = true; return node; }
+                node.parts = [];
+                for (const sub of part.parts) {
+                  if (counter.n >= MAX_NODES) { node.truncated = true; break; }
+                  node.parts.push(describeMimeTree(sub, depth + 1, counter));
+                }
+              }
+              return node;
+            }
+
+            function bodyFailureReason(root) {
+              const hasText = (p) => /^text\/(plain|html)/i.test(p.contentType || "") || (p.parts || []).some(hasText);
+              return hasText(root)
+                ? "text part present but its body is empty or not loaded"
+                : "no text/plain or text/html part in MIME tree";
+            }
+
             function getMessage(messageId, saveAttachments) {
               return new Promise((resolve) => {
                 try {
-                  const found = findMessageAnyFolder(messageId);
+                  const found = findBestMessageCopy(messageId);
                   if (found.error) { resolve({ error: found.error }); return; }
                   const { msgHdr } = found;
+                  const storedLocally = isStoredOffline(msgHdr);
 
                   const { MsgHdrToMimeMessage } = ChromeUtils.importESModule(
                     "resource:///modules/gloda/MimeMessage.sys.mjs"
                   );
+                  const { setTimeout, clearTimeout } = ChromeUtils.importESModule(
+                    "resource://gre/modules/Timer.sys.mjs"
+                  );
+                  const timer = setTimeout(() => resolve({
+                    error: `Timed out after ${BODY_FETCH_TIMEOUT_MS / 1000}s reading the message body` +
+                      (storedLocally ? "" : " (no copy of this message is stored locally)"),
+                  }), BODY_FETCH_TIMEOUT_MS);
 
                   MsgHdrToMimeMessage(msgHdr, null, (aMsgHdr, aMimeMsg) => {
+                    clearTimeout(timer);
                     if (!aMimeMsg) { resolve({ error: "Could not parse message" }); return; }
 
                     let body = "";
                     let bodyIsHtml = false;
+                    let bodyExtraction = null;
+                    let coerceError = null;
                     try {
                       body = aMimeMsg.coerceBodyToPlaintext();
-                    } catch { body = ""; }
+                    } catch (e) { body = ""; coerceError = String(e).slice(0, 200); }
 
                     if (!body) {
                       try {
@@ -843,9 +947,18 @@ var mcpServer = class extends ExtensionCommon.ExtensionAPI {
                         if (fb) {
                           body = fb.isHtml ? stripHtml(fb.text) : fb.text;
                         } else {
-                          body = "(Could not extract body text)";
+                          bodyExtraction = {
+                            status: "failed",
+                            reason: bodyFailureReason(aMimeMsg),
+                            storedLocally,
+                            coerce: coerceError ? `threw: ${coerceError}` : "returned empty",
+                            parts: describeMimeTree(aMimeMsg),
+                          };
                         }
-                      } catch { body = "(Could not extract body text)"; }
+                      } catch (e) {
+                        console.error("[thunderbird-mcp] getMessage body extraction threw:", e);
+                        bodyExtraction = { status: "failed", reason: `exception: ${String(e).slice(0, 200)}` };
+                      }
                     }
 
                     const attachments = [];
@@ -871,6 +984,8 @@ var mcpServer = class extends ExtensionCommon.ExtensionAPI {
                       date: msgHdr.date ? new Date(msgHdr.date / 1000).toISOString() : null,
                       body: sanitizeStr(body),
                       bodyIsHtml,
+                      bodyAvailable: bodyExtraction === null,
+                      ...(bodyExtraction ? { bodyExtraction } : {}),
                       attachments
                     };
 
@@ -1521,14 +1636,39 @@ var mcpServer = class extends ExtensionCommon.ExtensionAPI {
             }
 
             function fetchBody(msgHdr) {
+              // Resolves { text, reason, offline }. `reason` says why `text` is empty, so a failed
+              // fetch is not confused with a message that has no body.
               return new Promise((resolve) => {
+                const { setTimeout, clearTimeout } = ChromeUtils.importESModule(
+                  "resource://gre/modules/Timer.sys.mjs"
+                );
+                const offline = isStoredOffline(msgHdr);
+                let settled = false;
+                let timer = null;
+                const done = (text, reason) => {
+                  if (settled) return;
+                  settled = true;
+                  clearTimeout(timer);
+                  resolve({ text, reason, offline });
+                };
+                timer = setTimeout(() => done("", "timeout"), BODY_FETCH_TIMEOUT_MS);
                 try {
+                  const { MsgHdrToMimeMessage } = ChromeUtils.importESModule(
+                    "resource:///modules/gloda/MimeMessage.sys.mjs"
+                  );
                   MsgHdrToMimeMessage(msgHdr, null, (aMsgHdr, aMimeMsg) => {
                     try {
-                      resolve(aMimeMsg ? aMimeMsg.coerceBodyToPlaintext() || "" : "");
-                    } catch { resolve(""); }
-                  }, false, { examineEncryptedParts: true, saneBodySize: true });
-                } catch { resolve(""); }
+                      if (!aMimeMsg) { done("", "mime-null"); return; }
+                      const text = aMimeMsg.coerceBodyToPlaintext() || "";
+                      done(text, text ? "ok" : ((aMimeMsg.parts || []).length ? "coerce-empty" : "no-parts"));
+                    } catch (e) { done("", `coerce-threw: ${String(e).slice(0, 80)}`); }
+                  // No `saneBodySize`: it cuts long HTML bodies at about 21K chars, so a body
+                  // search would miss text further in. get_message reads the full body too.
+                  }, false, { examineEncryptedParts: true });
+                } catch (e) {
+                  console.error("[thunderbird-mcp] fetchBody failed:", e);
+                  done("", `stream-threw: ${String(e).slice(0, 80)}`);
+                }
               });
             }
 
