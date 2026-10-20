@@ -1,5 +1,6 @@
 use rmcp::{model::{CallToolResult, Content}, Error as McpError};
 use serde_json::json;
+use std::path::Path;
 use crate::bridge::{Bridge, BridgeError};
 
 pub fn bridge_err(e: BridgeError) -> McpError {
@@ -54,11 +55,7 @@ pub async fn get_message(
     message_id: String,
     save_attachments: Option<bool>,
 ) -> Result<CallToolResult, McpError> {
-    let r = bridge.call("/messages/get", json!({
-        "message_id": message_id,
-        "save_attachments": save_attachments
-    })).await.map_err(bridge_err)?;
-    Ok(result_text(r))
+    get_message_in(bridge, message_id, save_attachments, &body_dir()).await
 }
 
 pub async fn get_recent_messages(
@@ -139,6 +136,117 @@ pub async fn delete_folder(
     Ok(result_text(r))
 }
 
+/// Longest body (in chars) that `get_message` returns inline. Longer bodies go to a file.
+const MAX_INLINE_BODY_CHARS: usize = 4000;
+/// Chars of the body start returned as `bodyPreview` when the body goes to a file.
+const BODY_PREVIEW_CHARS: usize = 500;
+/// Number of body files kept in the body directory; older ones are deleted.
+const MAX_BODY_FILES: usize = 50;
+
+/// Moves a long `body` out of the response into a private file, so the caller reads it
+/// with `grep`/`awk`/`sed` instead of paying for it in context.
+///
+/// A body of at most `max_inline` chars stays inline. The response then only gains
+/// `bodyLength`. Otherwise `body` is replaced by `bodyPreview` (`BODY_PREVIEW_CHARS` chars),
+/// `bodyLength`, `bodyFile` (absolute path) and `bodyHint`. `r` changes only if the write
+/// succeeds, so on `Err` the caller still has the full body.
+fn offload_body(r: &mut serde_json::Value, dir: &Path, max_inline: usize) -> std::io::Result<()> {
+    let Some(body) = r.get("body").and_then(|b| b.as_str()) else {
+        return Ok(());
+    };
+    let length = body.chars().count();
+    if length <= max_inline {
+        r["bodyLength"] = json!(length);
+        return Ok(());
+    }
+
+    let preview: String = body.chars().take(BODY_PREVIEW_CHARS).collect();
+    let path = write_body_file(dir, body)?;
+    // Best-effort cleanup: failing to delete an old file must not lose this body.
+    prune_body_files(dir, MAX_BODY_FILES).ok();
+
+    if let Some(obj) = r.as_object_mut() {
+        obj.remove("body");
+        obj.insert("bodyPreview".into(), json!(preview));
+        obj.insert("bodyLength".into(), json!(length));
+        obj.insert("bodyFile".into(), json!(path.to_string_lossy()));
+        obj.insert("bodyHint".into(), json!(
+            "Full body is in bodyFile. Search it with grep, awk or sed on that path; do not read the whole file."
+        ));
+    }
+    Ok(())
+}
+
+/// Deletes all but the newest `keep` body files in `dir`. File names sort in time order
+/// (`body-<ms>-<n>.txt`), so no mtimes are needed. Other files in `dir` are left alone.
+fn prune_body_files(dir: &Path, keep: usize) -> std::io::Result<()> {
+    let mut files = std::fs::read_dir(dir)?
+        .map(|entry| entry.map(|e| e.path()))
+        .collect::<std::io::Result<Vec<_>>>()?;
+    files.retain(|p| {
+        p.file_name()
+            .and_then(|n| n.to_str())
+            .is_some_and(|n| n.starts_with("body-") && n.ends_with(".txt"))
+    });
+    files.sort();
+    let excess = files.len().saturating_sub(keep);
+    files.iter().take(excess).try_for_each(std::fs::remove_file)
+}
+
+/// Writes `body` to a new `0600` file in `dir` (created `0700`) and returns its absolute path.
+/// The binary is built for Linux only, so Unix permission APIs are used directly.
+fn write_body_file(dir: &Path, body: &str) -> std::io::Result<std::path::PathBuf> {
+    use std::io::Write;
+    use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt, PermissionsExt};
+    use std::sync::atomic::{AtomicU64, Ordering};
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    // Distinguishes two files written in the same millisecond.
+    static COUNTER: AtomicU64 = AtomicU64::new(0);
+
+    std::fs::DirBuilder::new().recursive(true).mode(0o700).create(dir)?;
+    // The directory may already exist with looser permissions.
+    std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o700))?;
+
+    let ms = SystemTime::now().duration_since(UNIX_EPOCH).map_or(0, |d| d.as_millis());
+    let n = COUNTER.fetch_add(1, Ordering::Relaxed);
+    let path = dir.canonicalize()?.join(format!("body-{ms:013}-{n:06}.txt"));
+
+    let mut file = std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .mode(0o600)
+        .open(&path)?;
+    file.write_all(body.as_bytes())?;
+    Ok(path)
+}
+
+/// Where `get_message` puts long bodies: per-user runtime dir, else the cache dir.
+fn body_dir() -> std::path::PathBuf {
+    dirs::runtime_dir()
+        .or_else(dirs::cache_dir)
+        .unwrap_or_else(std::env::temp_dir)
+        .join("thunderbird-mcp")
+        .join("bodies")
+}
+
+pub async fn get_message_in(
+    bridge: &Bridge,
+    message_id: String,
+    save_attachments: Option<bool>,
+    body_dir: &Path,
+) -> Result<CallToolResult, McpError> {
+    let mut r = bridge.call("/messages/get", json!({
+        "message_id": message_id,
+        "save_attachments": save_attachments
+    })).await.map_err(bridge_err)?;
+    if let Err(e) = offload_body(&mut r, body_dir, MAX_INLINE_BODY_CHARS) {
+        // `r` is unchanged on error, so the caller still gets the full body.
+        r["bodyFileError"] = json!(e.to_string());
+    }
+    Ok(result_text(r))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -207,6 +315,125 @@ mod tests {
             .with_status(200).with_body("{}").create_async().await;
         get_message(&mock_bridge(&server).await, "msg-42".into(), None).await.unwrap();
         mock.assert_async().await;
+    }
+
+    fn long_body() -> String {
+        // Multi-byte chars: the limit counts chars, not bytes.
+        "é".repeat(MAX_INLINE_BODY_CHARS + 1)
+    }
+
+    #[test]
+    fn short_body_stays_inline_and_reports_length() {
+        let dir = tempfile::tempdir().unwrap();
+        let bodies = dir.path().join("bodies");
+        let mut r = json!({"body": "hello"});
+        offload_body(&mut r, &bodies, MAX_INLINE_BODY_CHARS).unwrap();
+        assert_eq!(r["body"], "hello");
+        assert_eq!(r["bodyLength"], 5);
+        assert!(r.get("bodyFile").is_none());
+        assert!(!bodies.exists(), "no directory is created for an inline body");
+    }
+
+    #[test]
+    fn body_of_exactly_max_chars_stays_inline() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut r = json!({"body": "é".repeat(MAX_INLINE_BODY_CHARS)});
+        offload_body(&mut r, &dir.path().join("bodies"), MAX_INLINE_BODY_CHARS).unwrap();
+        assert!(r.get("bodyFile").is_none());
+        assert_eq!(r["bodyLength"], MAX_INLINE_BODY_CHARS);
+    }
+
+    #[test]
+    fn response_without_body_is_untouched() {
+        let dir = tempfile::tempdir().unwrap();
+        for original in [json!({}), json!({"body": null}), json!({"body": ""})] {
+            let mut r = original.clone();
+            offload_body(&mut r, &dir.path().join("bodies"), MAX_INLINE_BODY_CHARS).unwrap();
+            assert!(r.get("bodyFile").is_none());
+            assert_eq!(r["body"], original["body"]);
+        }
+    }
+
+    #[test]
+    fn long_body_goes_to_file_with_preview() {
+        let dir = tempfile::tempdir().unwrap();
+        let bodies = dir.path().join("bodies");
+        let body = long_body();
+        let mut r = json!({"subject": "s", "body": body});
+        offload_body(&mut r, &bodies, MAX_INLINE_BODY_CHARS).unwrap();
+
+        assert!(r.get("body").is_none());
+        assert_eq!(r["subject"], "s");
+        assert_eq!(r["bodyLength"], MAX_INLINE_BODY_CHARS + 1);
+        assert_eq!(r["bodyPreview"].as_str().unwrap().chars().count(), BODY_PREVIEW_CHARS);
+        let path = std::path::PathBuf::from(r["bodyFile"].as_str().unwrap());
+        assert!(path.is_absolute());
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), body);
+        assert!(r["bodyHint"].as_str().unwrap().contains("grep"));
+    }
+
+    #[test]
+    fn body_file_and_directory_are_private() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::tempdir().unwrap();
+        let bodies = dir.path().join("bodies");
+        let mut r = json!({"body": long_body()});
+        offload_body(&mut r, &bodies, MAX_INLINE_BODY_CHARS).unwrap();
+
+        let file_mode = std::fs::metadata(r["bodyFile"].as_str().unwrap()).unwrap().permissions().mode();
+        let dir_mode = std::fs::metadata(&bodies).unwrap().permissions().mode();
+        assert_eq!(file_mode & 0o777, 0o600);
+        assert_eq!(dir_mode & 0o777, 0o700);
+    }
+
+    #[test]
+    fn two_long_bodies_get_distinct_files() {
+        let dir = tempfile::tempdir().unwrap();
+        let bodies = dir.path().join("bodies");
+        let mut a = json!({"body": long_body()});
+        let mut b = json!({"body": long_body()});
+        offload_body(&mut a, &bodies, MAX_INLINE_BODY_CHARS).unwrap();
+        offload_body(&mut b, &bodies, MAX_INLINE_BODY_CHARS).unwrap();
+        assert_ne!(a["bodyFile"], b["bodyFile"]);
+    }
+
+    #[test]
+    fn prune_keeps_newest_body_files_only() {
+        let dir = tempfile::tempdir().unwrap();
+        for i in 1..=5 {
+            std::fs::write(dir.path().join(format!("body-{i:013}-000000.txt")), "x").unwrap();
+        }
+        std::fs::write(dir.path().join("notes.txt"), "keep me").unwrap();
+        prune_body_files(dir.path(), 2).unwrap();
+
+        let mut left: Vec<String> = std::fs::read_dir(dir.path()).unwrap()
+            .map(|e| e.unwrap().file_name().into_string().unwrap())
+            .collect();
+        left.sort();
+        assert_eq!(left, vec![
+            "body-0000000000004-000000.txt",
+            "body-0000000000005-000000.txt",
+            "notes.txt",
+        ]);
+    }
+
+    #[tokio::test]
+    async fn get_message_offloads_long_body_through_bridge() {
+        let mut server = Server::new_async().await;
+        let body = long_body();
+        server.mock("POST", "/messages/get")
+            .with_status(200)
+            .with_body(json!({"id": "m1", "body": body}).to_string())
+            .create_async().await;
+        let dir = tempfile::tempdir().unwrap();
+
+        let res = get_message_in(&mock_bridge(&server).await, "m1".into(), None, dir.path()).await.unwrap();
+        let v = serde_json::to_value(&res).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(v["content"][0]["text"].as_str().unwrap()).unwrap();
+
+        assert_eq!(parsed["id"], "m1");
+        assert!(parsed.get("body").is_none());
+        assert_eq!(std::fs::read_to_string(parsed["bodyFile"].as_str().unwrap()).unwrap(), body);
     }
 
     #[tokio::test]

@@ -117,6 +117,6 @@ This project is **public on GitHub**. Before every commit:
 
 - **IMAP staleness** — `imapSyncPending: true` is returned when IMAP folders are involved. Message databases may lag behind the server until the user clicks the folder in Thunderbird. Not fixable without async sync; just retry.
 
-- **`get_message` body quality** — HTML newsletters strip to plain text via `stripHtml()`, leaving `[image_url]` artifacts and losing formatting. Bodies can be large (5000+ chars for newsletters). No fix planned; plain text is the right default for AI consumption.
+- **`get_message` body quality** — HTML newsletters strip to plain text via `stripHtml()`, leaving `[image_url]` artifacts and losing formatting. Bodies over 4000 chars are written to a private file and returned as `bodyFile` plus a 500-char `bodyPreview`, so they do not flood the context (see `docs/system_instructions.md`). Plain text is the right default for AI consumption.
 
 - **`search_contacts` missing emails** — Some contacts in the address book have no `primaryEmail` set. These return `email: null` (not an empty string). This is a data quality issue in the address book, not a bug.

@@ -64,14 +64,14 @@ impl ThunderbirdMcp {
         mail::search_messages(&self.bridge, query, folder, sender, recipient, date_from, date_to, max_results, search_body).await
     }
 
-    #[tool(description = "Read full email content, optionally save attachments to disk")]
+    #[tool(description = "Read email content and attachments. Bodies over 4000 chars are written to a private file: the response then has bodyFile (path), bodyLength and a bodyPreview — grep/awk/sed that file instead of reading it whole")]
     async fn get_message(
         &self,
         #[tool(param)]
         #[schemars(description = "Message ID")]
         message_id: String,
         #[tool(param)]
-        #[schemars(description = "Save attachments to ~/thunderbird-mcp-attachments/")]
+        #[schemars(description = "Save attachments to /tmp/thunderbird-mcp/<message>/ and return their paths")]
         save_attachments: Option<bool>,
     ) -> Result<CallToolResult, McpError> {
         mail::get_message(&self.bridge, message_id, save_attachments).await
