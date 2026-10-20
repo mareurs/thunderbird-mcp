@@ -46,4 +46,4 @@
 ## Infrastructure
 
 - The extension HTTP server runs on `localhost:45678` with Bearer token auth from `~/.thunderbird-mcp-auth`
-- Direct `curl` against port 45678 may return invalid JSON for mail endpoints — control characters in message content are sanitized by the Rust layer, not the extension; use the MCP interface in production
+- The extension encodes responses as UTF-8, so direct `curl` against port 45678 returns valid JSON with intact accents; the Rust layer still strips real control characters from message content as a second line of defence

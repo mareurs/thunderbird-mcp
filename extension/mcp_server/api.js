@@ -1854,6 +1854,19 @@ var mcpServer = class extends ExtensionCommon.ExtensionAPI {
 
             // ── HTTP plumbing ──────────────────────────────────────────────
 
+            /**
+             * Writes `value` as a JSON response body.
+             *
+             * httpd.sys.mjs `write()` sends each UTF-16 code unit as ONE byte, so any non-ASCII text
+             * would be cut to its low byte (U+2014 becomes 0x14, U+0122 becomes a bare `"`), which
+             * corrupts the JSON. The text must be turned into a string of UTF-8 bytes first.
+             * JSON.stringify output is well-formed, so encodeURIComponent cannot throw on it.
+             */
+            function writeJson(res, value) {
+              res.write(unescape(encodeURIComponent(JSON.stringify(value))));
+            }
+
+
             function makeHandler(fn) {
               return (req, res) => {
                 res.processAsync();
@@ -1877,7 +1890,7 @@ var mcpServer = class extends ExtensionCommon.ExtensionAPI {
                     } catch (e) {
                       res.setStatusLine("1.1", 400, "Bad Request");
                       res.setHeader("Content-Type", "application/json; charset=utf-8", false);
-                      res.write(JSON.stringify({ error: `Invalid JSON: ${e.message}` }));
+                      writeJson(res, { error: `Invalid JSON: ${e.message}` });
                       res.finish();
                       return;
                     }
@@ -1886,12 +1899,12 @@ var mcpServer = class extends ExtensionCommon.ExtensionAPI {
                     res.setStatusLine("1.1", 200, "OK");
                     // charset=utf-8 is critical — httpd.sys.mjs writes raw bytes
                     res.setHeader("Content-Type", "application/json; charset=utf-8", false);
-                    res.write(JSON.stringify(result));
+                    writeJson(res, result);
                   } catch (e) {
                     console.error("[thunderbird-mcp] handler error:", e);
                     res.setStatusLine("1.1", 200, "OK");
                     res.setHeader("Content-Type", "application/json; charset=utf-8", false);
-                    res.write(JSON.stringify({ error: e.toString() }));
+                    writeJson(res, { error: e.toString() });
                   }
                   res.finish();
                 })();

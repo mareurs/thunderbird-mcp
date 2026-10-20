@@ -113,7 +113,7 @@ This project is **public on GitHub**. Before every commit:
 
 ## Known Issues
 
-- **Control chars in raw HTTP responses** — Email subjects/bodies can contain control characters that make the raw HTTP response invalid JSON. Not a problem in production (Rust's `sanitize_str()` strips them before parsing), but direct `curl` tests against port 45678 will fail with `JSONDecodeError`. **Fixed** for all mail tools: `get_recent_messages`, `search_messages`, and `get_message` all apply `sanitizeStr()` in the extension. Other tools (filters, contacts, calendar) don't return free-text user content so are not affected.
+- **Control chars in raw HTTP responses** — **Fixed.** `httpd.sys.mjs` `write()` sends each UTF-16 code unit as one byte, so non-ASCII text was cut to its low byte (U+2014 became `0x14`, U+0122 became a bare `"`). That produced control characters, invalid UTF-8 and sometimes invalid JSON (`get_message` failed with `Invalid JSON from extension`). The extension now encodes every response as UTF-8 in `writeJson()` before `res.write`, so direct `curl` tests against port 45678 return valid JSON with intact accents. Rust's `sanitize_str()` and the extension's `sanitizeStr()` still strip real control characters as a second line of defence.
 
 - **IMAP staleness** — `imapSyncPending: true` is returned when IMAP folders are involved. Message databases may lag behind the server until the user clicks the folder in Thunderbird. Not fixable without async sync; just retry.
 
