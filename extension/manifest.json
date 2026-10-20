@@ -7,7 +7,7 @@
     "gecko": {
       "id": "thunderbird-mcp@luthriel.dev",
       "strict_min_version": "128.0",
-      "strict_max_version": "140.*"
+      "strict_max_version": "160.*"
     }
   },
   "background": {
